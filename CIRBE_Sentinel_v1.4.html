@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIRBE Sentinel — BdE EDITRAN File Tracking</title>
+<style>
+:root{
+  --paper:#F6F5F1; --panel:#FFFFFF; --ink:#16202C; --ink2:#5A6472;
+  --line:#DCDAD2; --line2:#ECEAE3;
+  --claret:#8E1B2F; --claret-soft:#F6E8EB;
+  --green:#1B6B4A; --green-soft:#E6F2EC;
+  --amber:#9A6B00; --amber-soft:#FBF3DF;
+  --blue:#2E4E6B; --blue-soft:#E8EEF4;
+  --grey-soft:#EEEDE7;
+  --mono:ui-monospace,"Cascadia Mono","Consolas",Menlo,monospace;
+  --sans:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:"Iowan Old Style",Palatino,"Palatino Linotype",Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--sans)}
+button{font:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink)}
+a{color:var(--claret)}
+:focus-visible{outline:2px solid var(--claret);outline-offset:1px}
+
+/* Masthead */
+.masthead{background:var(--panel);border-bottom:3px solid var(--claret);padding:14px 22px 10px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.masthead h1{font:600 22px/1 var(--serif);letter-spacing:.2px}
+.masthead h1 .reg{color:var(--claret)}
+.masthead .sub{color:var(--ink2);font-size:12.5px}
+.masthead .right{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#C2BFB5;margin-right:5px}
+.dot.on{background:var(--green)}
+
+/* Toolbar */
+.toolbar{display:flex;gap:10px;align-items:center;padding:12px 22px;border-bottom:1px solid var(--line);background:var(--paper);flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 13px;border-radius:6px;font-size:13px}
+.btn:hover{border-color:var(--ink2)}
+.btn.primary{background:var(--claret);border-color:var(--claret);color:#fff;font-weight:600}
+.btn.primary:hover{background:#761526}
+.btn.small{padding:4px 9px;font-size:12px;border-radius:5px}
+.btn.danger{color:var(--claret)}
+.folderchip{font:12px var(--mono);color:var(--ink2);background:var(--grey-soft);border:1px solid var(--line);padding:5px 9px;border-radius:6px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spacer{flex:1}
+
+/* KPI row */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:14px 22px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:11px 14px}
+.kpi .n{font:600 24px/1.1 var(--serif)}
+.kpi-link{cursor:pointer} .kpi-link:hover{border-color:var(--ink2)}
+.kpi .l{font-size:11.5px;color:var(--ink2);text-transform:uppercase;letter-spacing:.6px;margin-top:3px}
+.kpi.ok .n{color:var(--green)} .kpi.bad .n{color:var(--claret)} .kpi.warn .n{color:var(--amber)}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;padding:0 22px;border-bottom:1px solid var(--line)}
+.tab{border:none;background:none;padding:9px 14px;font-size:13.5px;color:var(--ink2);border-bottom:2px solid transparent}
+.tab.active{color:var(--ink);border-bottom-color:var(--claret);font-weight:600}
+.view{display:none;padding:16px 22px 60px}
+.view.active{display:block}
+
+/* Ledger strip (signature) */
+.ledger{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px;overflow-x:auto}
+.ledger h3{font:600 13px var(--sans);text-transform:uppercase;letter-spacing:.7px;color:var(--ink2);margin-bottom:10px}
+.lanes{display:flex;gap:6px;min-height:96px;align-items:stretch}
+.daycol{min-width:64px;display:flex;flex-direction:column;gap:3px;font-size:10.5px}
+.daycol .d{font:11px var(--mono);color:var(--ink2);text-align:center;border-top:1px solid var(--line2);padding-top:4px;margin-top:auto}
+.lanechip{border-radius:4px;padding:2px 5px;font:10.5px var(--mono);white-space:nowrap;border:1px solid transparent}
+.lanechip.out{background:var(--blue-soft);color:var(--blue);border-color:#CBD9E5}
+.lanechip.in{background:var(--grey-soft);color:var(--ink2);border-color:var(--line)}
+.lanechip.in.ok{background:var(--green-soft);color:var(--green);border-color:#CBE3D6}
+.lanechip.in.bad{background:var(--claret-soft);color:var(--claret);border-color:#E9CBD1}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink2);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);background:#FBFAF7;position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr.clickable{cursor:pointer} tr.clickable:hover td{background:#FBFAF7}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--ink2)}
+.tablewrap{max-height:560px;overflow:auto;border-radius:8px;border:1px solid var(--line)}
+.tablewrap table{border:none}
+
+/* Chips */
+.chip{display:inline-block;border-radius:4px;padding:1px 7px;font:600 11px var(--mono);letter-spacing:.3px}
+.chip.acc{background:var(--green-soft);color:var(--green)}
+.chip.rej{background:var(--claret-soft);color:var(--claret)}
+.chip.pend{background:var(--amber-soft);color:var(--amber)}
+.chip.info{background:var(--blue-soft);color:var(--blue)}
+.chip.sent{background:var(--grey-soft);color:var(--ink2)}
+.codechip{display:inline-block;background:var(--grey-soft);border:1px solid var(--line);border-radius:4px;padding:0 6px;font:11.5px var(--mono);margin:1px 3px 1px 0;cursor:pointer}
+.codechip.err{background:var(--claret-soft);border-color:#E2BFC6;color:var(--claret)}
+.fchip{display:inline-block;border:1px solid var(--line);border-radius:14px;padding:3px 11px;font:600 11.5px var(--mono);margin:0 3px;cursor:pointer;background:var(--panel);color:var(--ink2);user-select:none}
+.fchip.inc{background:var(--green-soft);border-color:var(--green);color:var(--green)}
+.fchip.exc{background:var(--claret-soft);border-color:var(--claret);color:var(--claret);text-decoration:line-through}
+.codechip.ok{background:var(--green-soft);border-color:#C6DFD2;color:var(--green)}
+.codechip.warn{background:var(--amber-soft);border-color:#E8D6A8;color:var(--amber)}
+
+/* Filters */
+.filters{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.filters input[type=text],.filters input[type=search]{padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);min-width:220px}
+.filters select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+
+/* Detail drawer */
+.detail{background:#FBFAF7;border-left:3px solid var(--claret);padding:10px 12px;font-size:12.5px}
+.detail .raw{font:11px/1.6 var(--mono);background:var(--panel);border:1px solid var(--line2);padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-all;max-height:140px;overflow:auto;margin:6px 0}
+.kbcard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.kbcard .code{font:700 14px var(--mono)}
+.kbcard .fam{font-size:11px;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px}
+.kbcard .act{margin-top:6px;font-size:12.5px;color:var(--blue)}
+.kbcard .src{margin-top:4px;font-size:11px;color:var(--ink2)}
+.sev{float:right;font:600 10.5px var(--sans);text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:4px}
+.sev.reject{background:var(--claret-soft);color:var(--claret)} .sev.accept{background:var(--green-soft);color:var(--green)}
+.sev.pending{background:var(--amber-soft);color:var(--amber)} .sev.informative{background:var(--blue-soft);color:var(--blue)}
+.sev.message{background:var(--grey-soft);color:var(--ink2)} .sev.team{background:#EFE6F4;color:#5B3A75}
+
+.note{background:var(--amber-soft);border:1px solid #E8D6A8;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:980px){.grid2{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+.panel h3{font:600 13px var(--sans);text-transform:uppercase;letter-spacing:.7px;color:var(--ink2);margin-bottom:10px}
+textarea{width:100%;min-height:140px;border:1px solid var(--line);border-radius:6px;padding:8px;font:12px var(--mono);background:var(--panel)}
+label{font-size:12.5px;color:var(--ink2)}
+.formrow{display:flex;gap:8px;margin:8px 0;align-items:center;flex-wrap:wrap}
+.formrow input[type=text]{padding:6px 9px;border:1px solid var(--line);border-radius:6px;flex:1;min-width:160px}
+.empty{padding:34px;text-align:center;color:var(--ink2);font-size:13px}
+.toast{position:fixed;bottom:18px;right:18px;background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:380px;z-index:50}
+.toast.show{opacity:.96}
+.runlog{font:12px var(--mono);max-height:220px;overflow:auto}
+.runlog div{padding:4px 0;border-bottom:1px solid var(--line2)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <h1>CIRBE <span class="reg">Sentinel</span></h1>
+  <span class="sub">Banco de España · EDITRAN transmission register & error bank — Circular 1/2013 (CRG · GTR · GNR) · <b>v1.4</b></span>
+  <div class="right">
+    <span><span class="dot" id="dotOut"></span>Outgoing folder</span>
+    <span><span class="dot" id="dotIn"></span>Incoming folder</span>
+    <span id="lastRun" class="mono"></span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <button class="btn" id="btnPickOut">Connect outgoing folder</button>
+  <span class="folderchip" id="chipOut">Transmit_CIRBE_all — not connected</span>
+  <button class="btn" id="btnPickIn">Connect incoming folder</button>
+  <span class="folderchip" id="chipIn">Transmit_from_EDITRAN — not connected</span>
+  <span class="spacer"></span>
+  <button class="btn" id="btnImportFiles">Add files manually…</button>
+  <button class="btn primary" id="btnUpdate">⟳ Update — read new files</button>
+</div>
+
+<div class="kpis" id="kpis"></div>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-v="dashboard">Dashboard</button>
+  <button class="tab" data-v="files">Files</button>
+  <button class="tab" data-v="records">Records</button>
+  <button class="tab" data-v="inspect">Inspect line</button>
+  <button class="tab" data-v="recon">Reconciliation</button>
+  <button class="tab" data-v="kb">Error knowledge base</button>
+  <button class="tab" data-v="db">Database helper</button>
+  <button class="tab" data-v="settings">Settings & backup</button>
+</nav>
+
+<!-- DASHBOARD -->
+<section class="view active" id="v-dashboard">
+  <div class="ledger">
+    <h3>Transmission ledger — sent ↑ / received ↓ by day</h3>
+    <div class="lanes" id="lanes"><div class="empty">Connect your folders and press Update. New files are read once; existing files are never re-read.</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Latest rejected / pending records</h3>
+      <div id="dashProblems"><div class="empty">Nothing yet.</div></div>
+    </div>
+    <div class="panel">
+      <h3>Update history (daily run log)</h3>
+      <div class="runlog" id="runlog"><div class="empty" style="padding:10px">No runs yet.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FILES -->
+<section class="view" id="v-files">
+  <div class="filters">
+    <input type="search" id="fFileSearch" placeholder="Search file name…">
+    <label>From <input type="date" id="fFileFrom"></label>
+    <label>To <input type="date" id="fFileTo"></label>
+    <select id="fFileDir"><option value="">All directions</option><option value="OUT">Sent (entity → BdE)</option><option value="IN">Received (BdE → entity)</option></select>
+    <select id="fFileProc"><option value="">All processes</option></select>
+    <select id="fFileVerdict"><option value="">All results</option><option>ACCEPTED</option><option>REJECTED</option><option>PENDING</option><option>INFO</option><option>SENT</option></select>
+    <span class="muted" style="font-size:11.5px">Click column headers to sort.</span>
+  </div>
+  <div class="tablewrap"><table id="tblFiles"></table></div>
+</section>
+
+<!-- RECORDS -->
+<section class="view" id="v-records">
+  <div class="filters">
+    <input type="search" id="fRecSearch" placeholder="Search… multiple terms = AND, -term = exclude (e.g. CRGLIS -L1222)">
+    <label>From <input type="date" id="fRecFrom"></label>
+    <label>To <input type="date" id="fRecTo"></label>
+    <span id="recStatusChips" title="Click: include → exclude → off"></span>
+    <select id="fRecProc"><option value="">All processes</option></select>
+    <select id="fRecType"><option value="">All record types</option></select>
+    <button class="btn small" id="btnReeval" title="Re-apply current knowledge base + rules to all stored records">↺ Re-evaluate statuses</button>
+    <button class="btn small" id="btnExportRecCsv">Export CSV</button>
+  </div>
+  <div class="tablewrap"><table id="tblRecords"></table></div>
+</section>
+
+<!-- INSPECT -->
+<section class="view" id="v-inspect">
+  <div class="grid2">
+    <div class="panel">
+      <h3>Paste a raw line (or several) from any CIRBE / EDITRAN file</h3>
+      <textarea id="insText" style="min-height:120px" placeholder="IN004BSFI25IL000120101                                  202604OPE2L2282"></textarea>
+      <div class="formrow">
+        <select id="insDir"><option value="IN">Treat as received (BdE → entity)</option><option value="OUT">Treat as sent (entity → BdE)</option></select>
+        <button class="btn primary" id="btnInspect">Diagnose</button>
+      </div>
+      <p class="muted" style="font-size:12px">The diagnosis shows the detected record type, status verdict, every code with its knowledge-base meaning, identified keys/dates, '$' variation markers, and a position-by-position segmentation of the line (heuristic — exact field positions are defined in the manuals).</p>
+    </div>
+    <div class="panel"><h3>Diagnosis</h3><div id="insResult"><div class="empty">Paste a line and press Diagnose.</div></div></div>
+  </div>
+</section>
+
+<!-- RECONCILIATION -->
+<section class="view" id="v-recon">
+  <p class="muted" style="margin-bottom:10px">Records grouped by identified key (CIRBE code / NIF / operation code). The latest BdE response wins. Keys with a rejection and no later acceptance need action.</p>
+  <div class="filters">
+    <input type="search" id="fReconSearch" placeholder="Search key or name…">
+    <select id="fReconStatus"><option value="">All</option><option>REJECTED</option><option>PENDING</option><option>ACCEPTED</option><option>SENT</option></select>
+  </div>
+  <div class="tablewrap"><table id="tblRecon"></table></div>
+</section>
+
+<!-- KB -->
+<section class="view" id="v-kb">
+  <div class="note">Seeded from the official BdE manuals: <b>CRG-IE2013.07</b> (operations), <b>GTR-IE2004.01 V12.17</b> (persons), <b>GNR-IE2021.04 V1.5</b> (non-resident codes). Codes not in this bank are flagged in record details — add them here as you resolve them, and the meaning is remembered. See Settings for official manual links.</div>
+  <div class="filters">
+    <input type="search" id="fKbSearch" placeholder="Search code or text… e.g. R5075, CM998, type 86">
+    <select id="fKbFam"><option value="">All families</option></select>
+    <button class="btn small" id="btnKbAdd">+ Add code</button>
+    <button class="btn small" id="btnKbBulk">Paste codes from manual…</button>
+    <button class="btn small" id="btnKbExport">Export KB</button>
+    <button class="btn small" id="btnKbImport">Import KB</button>
+  </div>
+  <div id="kbBulkPanel" class="panel" style="display:none;margin-bottom:12px">
+    <h3>Paste codes from the manual</h3>
+    <p class="muted" style="font-size:12.5px;margin-bottom:8px">Select lines in the PDF (e.g. CRG §9) and paste here. Each line like <span class="mono">L1222: Los datos C1 parte 2… han sido dados de baja.</span> becomes one entry. The code is auto-detected (R####, L####, RM###, CM99#, C99##, A####, TYPE##, RT##); the rest becomes the description. Severity is guessed (rechazado→reject, baja/pendiente→pending, sin errores→accept) and editable afterwards.</p>
+    <textarea id="kbBulkText" placeholder="L1222: Los datos C1 parte 2 y C1 parte 4 de la operación que se indica han sido dados de baja.&#10;L1124: El código de operación que se indica en 'Código vinculado' no figura declarado, no es posible realizar la vinculación.&#10;R2345: ..."></textarea>
+    <div class="formrow">
+      <label>Default family:</label><input type="text" id="kbBulkFam" value="CRGLIS notice (L)" style="flex:0 0 200px">
+      <label><input type="checkbox" id="kbBulkOverwrite"> Overwrite codes I already have</label>
+      <button class="btn primary" id="btnKbBulkRun">Import lines</button>
+      <button class="btn" id="btnKbBulkCancel">Cancel</button>
+    </div>
+  </div>
+</section>
+
+<!-- DB HELPER -->
+<section class="view" id="v-db">
+  <div class="grid2">
+    <div class="panel">
+      <h3>1 · Paste a query result (CSV / TSV, header row first)</h3>
+      <textarea id="dbPaste" placeholder="OPERATION_CODE&#9;CUSTOMER&#9;STATUS&#10;0012345&#9;KUROS SL&#9;ACTIVE"></textarea>
+      <div class="formrow">
+        <label>Key column:</label><select id="dbKeyCol"></select>
+        <button class="btn" id="btnDbAnalyze">Analyse impact</button>
+      </div>
+      <p class="muted" style="font-size:12px">Each value in the key column is matched against every tracked record (keys, names and raw content). Use it to see which database rows are touched by sent files, rejections or BdE notifications.</p>
+    </div>
+    <div class="panel">
+      <h3>2 · Impact</h3>
+      <div id="dbResult"><div class="empty">Paste data and choose the key column.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section class="view" id="v-settings">
+  <div class="grid2">
+    <div class="panel">
+      <h3>Backup & restore</h3>
+      <p class="muted" style="margin-bottom:8px">Everything (file register, records, run log, knowledge base) is stored in this browser. Export a backup regularly — it also lets you move the register to another PC.</p>
+      <div class="formrow">
+        <button class="btn" id="btnExportState">Export full state (.json)</button>
+        <button class="btn" id="btnImportState">Import state</button>
+        <button class="btn danger" id="btnReset">Reset everything</button>
+      </div>
+      <h3 style="margin-top:18px">Storage & speed</h3>
+      <div class="formrow"><label><input type="checkbox" id="chkSkipInfo" checked> Skip INFO records at import (they are still counted per file — recommended for large volumes)</label></div>
+      <div class="formrow"><label><input type="checkbox" id="chkLeanRaw" checked> Keep raw line text only for REJECTED / PENDING records (saves ~90% space)</label></div>
+      <div class="formrow"><button class="btn" id="btnCompact">Compact existing register now</button><span class="muted" id="compactStats" style="font-size:12px"></span></div>
+      <h3 style="margin-top:18px">Entity name filter (optional)</h3>
+      <div class="formrow"><input type="text" id="setEntity" placeholder="e.g. COMMERZBANK AG SUCURSAL EN ESPANA"><button class="btn small" id="btnSaveEntity">Save</button></div>
+    </div>
+    <div class="panel">
+      <h3>Official sources (primary references)</h3>
+      <ul style="margin-left:18px;font-size:13px;line-height:1.9">
+        <li><a href="https://www.bde.es/f/webbe/INF/MenuVertical/Supervision/Normativa_y_criterios/informacion/ficheros/CRG-IE201307.pdf" target="_blank" rel="noopener">CRG-IE2013.07 — Operations risk declarations (current, V10.x)</a></li>
+        <li><a href="https://www.bde.es/f/webbde/INF/MenuVertical/Supervision/Normativa_y_criterios/informacion/ficheros/CRG-IE201307.pdf" target="_blank" rel="noopener">CRG-IE2013.07 — alternate BdE path (older mirror)</a></li>
+        <li><a href="https://www.bde.es/f/webbde/INF/MenuVertical/Supervision/Normativa_y_criterios/informacion/GTR-IE200401-V12.17.pdf" target="_blank" rel="noopener">GTR-IE2004.01 V12.17 — Risk holders & persons (GTRTTE/GTRTTS)</a></li>
+        <li><a href="https://www.bde.es/f/webbe/INF/MenuVertical/SistemasDePago/ficheros/GNR-IE202104-V1.5.pdf" target="_blank" rel="noopener">GNR-IE2021.04 V1.5 — Non-resident identification codes (GNRNRR/GNRNRE)</a></li>
+      </ul>
+      <h3 style="margin-top:14px">Built-in error codes</h3>
+      <p class="muted" style="font-size:12.5px;margin-bottom:6px">The app ships with seed entries from the three manuals. New shipped codes are merged automatically on load; press below to force-refresh after replacing the HTML file.</p>
+      <div class="formrow"><button class="btn small" id="btnRefreshSeed">Refresh built-in codes</button><span class="muted mono" id="seedCount" style="font-size:12px"></span></div>
+      <h3 style="margin-top:14px">How "Update" works</h3>
+      <p class="muted" style="font-size:12.5px;line-height:1.7">Folders are scanned recursively. A file is identified by <span class="mono">path + size + modified time</span>; only unseen files are read and parsed. Re-press Update any time — already-processed files are skipped, so it is safe to run daily. Folder permissions may need re-granting after a browser restart (the buttons remember the last folders and just re-ask).</p>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="hiddenFiles" multiple style="display:none">
+<input type="file" id="hiddenJson" accept=".json" style="display:none">
+
+<script>
+"use strict";
+/* =========================================================================
+   CIRBE Sentinel — single-file, zero-dependency tracker for BdE/CIRBE
+   EDITRAN exchanges. Open locally in Edge or Chrome.
+   ========================================================================= */
+
+/* ---------- safe storage (works even where localStorage is blocked) ---- */
+const mem = {};
+const store = {
+  get(k){ try{ return localStorage.getItem(k) ?? mem[k] ?? null }catch(e){ return mem[k] ?? null } },
+  set(k,v){ mem[k]=v; try{ localStorage.setItem(k,v) }catch(e){} },
+  del(k){ delete mem[k]; try{ localStorage.removeItem(k) }catch(e){} }
+};
+
+/* ---------- process catalogue (from BdE manuals) ------------------------ */
+const PROCESSES = {
+  CRGOPE:{dir:"OUT",label:"Basic data of operations, transfers & collateral (daily)"},
+  CRGDEC:{dir:"OUT",label:"Dynamic data — monthly/quarterly declaration"},
+  CRGCCE:{dir:"OUT",label:"Rectifications of basic data / corrections of dynamic data"},
+  CRGDAR:{dir:"OUT",label:"Code of Good Practices — dynamic data"},
+  GTRTTE:{dir:"OUT",label:"Persons / risk holders declaration"},
+  GNRNRR:{dir:"OUT",label:"Non-resident code requests & data variations"},
+  CRGOPS:{dir:"IN",label:"BdE reply to CRGOPE (basic data notifications)"},
+  CRGDES:{dir:"IN",label:"BdE reply to CRGDEC (dynamic data notifications)"},
+  CRGCCS:{dir:"IN",label:"BdE reply to CRGCCE (rectification notifications)"},
+  CRGDAE:{dir:"IN",label:"BdE reply to CRGDAR (good-practices notifications)"},
+  CRGLIS:{dir:"IN",label:"Incident & status listings on declarations (IN0xx records)"},
+  CRGCIE:{dir:"IN",label:"Monthly close — aggregated report per holder (Annex 3)"},
+  CRGCIR:{dir:"IN",label:"Re-issued aggregated report after rectifications"},
+  CRGEUR:{dir:"IN",label:"AnaCredit notifications / inconsistencies"},
+  CRGFLE:{dir:"IN",label:"AnaCredit feedback-loop monthly report"},
+  CRGFRE:{dir:"IN",label:"AnaCredit feedback-loop rectified report"},
+  CRGPMA:{dir:"IN",label:"Mass send of data requested via CRGWWW"},
+  GTRTTS:{dir:"IN",label:"BdE reply to GTRTTE (persons notifications)"},
+  GNRNRE:{dir:"IN",label:"BdE reply to GNRNRR (non-resident code notifications)"},
+  CIRCRGOPS:{dir:"IN",label:"Legacy alias of CRGOPS"},
+  CIRCRGDES:{dir:"IN",label:"Legacy alias of CRGDES"},
+  CRGCCS2:{dir:"IN",label:""}
+};
+
+/* ---------- record-type catalogue --------------------------------------- */
+const RECTYPES = {
+  /* GNR (1000-byte) */
+  "A2000":"GNR header (entity block)","A2001":"Request code — non-resident legal person","A2002":"Request code — non-resident natural person",
+  "A2003":"Variation of data — non-resident legal person","A2004":"Variation of data — non-resident natural person","A2005":"Variation of name — non-resident",
+  "A2050":"BdE: name change of a non-resident","A2051":"BdE: incident on previously assigned non-resident code","A2052":"BdE: recommended sector review",
+  /* GTR (700-byte, 2-digit) */
+  "00":"GTR header (entity block)","21":"Person registration (alta)","22":"Person data variation","23":"Person deregistration (baja)",
+  "41":"Collective holder member — alta","43":"Collective holder member — baja","44":"Link to Spanish public-sector entity — alta","45":"Link to Spanish public-sector entity — baja",
+  "46":"Link to related-client group — alta","47":"Link to related-client group — baja","61":"BdE: confirmation request (disparity/discrepancy)","62":"Confirmation of person data",
+  "80":"End of person declarations for the month","85":"BdE: risk/securities without declared person","86":"BdE: person code change","87":"BdE: recommended value (sector, legal status…)",
+  "88":"BdE: record ACCEPTED","89":"BdE: confirmation still pending","90":"BdE: assimilation result of the message","95":"BdE: expected close date of process",
+  /* CRG basic data (CRGOPE/CRGOPS) */
+  "AB000":"CRG header — basic data of operations","AD000":"CRG header — basic data of collateral",
+  "DB010":"Person–operation relation","DB020":"Basic data of operation","DB030":"Complementary loan data","DE010":"Loan interest-rate data",
+  "DF011":"Transfer identification","DF012":"Transfer–operation link","DG010":"Code-linking record","DG020":"Operations to communicate to other entities",
+  "DGC01":"Accept/reject BdE authorisation request","DGC20":"Reject basic data communicated by BdE on behalf of another entity",
+  "BB010":"Baja: person–operation relation","BB020":"Baja: operation","BB030":"Baja: complementary loan data","BE010":"Baja: loan interest rates",
+  "BF011":"Baja: transfer","BF012":"Baja: transfer–operation link","BG010":"Baja: code link",
+  "RB001":"Reactivation of operation/transfer","RB002":"Reactivation of collateral","ZB999":"End of monthly basic data (operations)","ZB996":"End of basic data (collateral)",
+  "DD010":"Operation–collateral–asset relation","DD011":"Basic data of received collateral","DD020":"Property collateral pt.1","DD021":"Property collateral pt.1 cont.",
+  "DD022":"Property collateral — buildings/land detail","DD025":"Collateral value","DD030":"Financial assets received as collateral",
+  "BD010":"Baja: operation–collateral relation","BD011":"Baja: collateral","BD020":"Baja: property collateral pt.1","BD021":"Baja: property pt.1 cont.","BD022":"Baja: property detail","BD025":"Baja: collateral value","BD030":"Baja: financial asset collateral",
+  /* CRG dynamic data */
+  "DC000":"CRG header — dynamic data of operations","DC011":"Dynamic: direct risks & assumed risks","DC013":"Dynamic: credit-institution loan data","DC014":"Dynamic: risks assumed by assignees",
+  "DC020":"Dynamic: indirect risks","DC030":"Dynamic: financial data of loans to legal persons","DC040":"Dynamic: joint responsibilities",
+  "DD000":"CRG header — dynamic data of collateral","DD040":"Dynamic: operation–asset relation","DD041":"Dynamic: additional collateral data","DD050":"Dynamic: buildings under construction",
+  "DG011":"Header — dynamic data for other entities","DG030":"Dynamic risks to communicate to other entities","DGC30":"Dynamic data communicated by BdE for another entity",
+  "DH000":"Header — monthly prudential (default status)","DH030":"Default status of legal-person holders","DH001":"Header — quarterly accounting data","DH010":"Accounting data of loans",
+  "DH002":"Header — quarterly holder risk","DH020":"Holder risk data","ZD990":"Dynamic collateral declaration — empty","ZH991":"End quarterly accounting","ZH992":"End holder risk","ZH993":"End default status",
+  "DT000":"Header — Good Practices dynamic data","DT001":"Good Practices operation data","ZT990":"Good Practices — empty declaration",
+  /* CRG corrections */
+  "AR000":"Header — rectifications & corrections (operations)","AS000":"Header — rectifications (collateral)","AT000":"Header — corrections: default status","AT001":"Header — corrections: accounting","AT002":"Header — corrections: holder risk",
+  /* CRGLIS / CRGEUR / close */
+  "IN000":"CRGLIS header — incidents","IN003":"General status notice — operations","IN004":"Incident — operations (no extra data)","IN005":"Incident — operations (with extra data)",
+  "IN006":"General status notice — collateral","IN007":"Incident — collateral (no extra data)","IN008":"Incident — collateral (with extra data)",
+  "IN012":"Status — quarterly accounting","IN013":"Incident — quarterly accounting","IN014":"Incident — quarterly accounting (extra data)",
+  "IN015":"Status — quarterly prudential","IN016":"Incident — quarterly prudential","IN017":"Incident — quarterly prudential (extra data)",
+  "IN018":"Status — monthly prudential","IN019":"Incident — monthly prudential","IN020":"Incident — monthly prudential (extra data)",
+  "IN021":"Status — Good Practices","IN022":"Incident — Good Practices",
+  "EU000":"CRGEUR header","EU001":"Operation communicated to AnaCredit","EU002":"Collateral code communicated to AnaCredit",
+  "EU050":"CRGEUR notification header","EU051":"AnaCredit notice — operations","EU052":"AnaCredit notice — operations (extra data)","EU053":"AnaCredit notice — collateral","EU054":"AnaCredit notice — quarterly accounting","EU055":"AnaCredit notice — quarterly prudential","EU056":"AnaCredit notice — monthly prudential",
+  "AI000":"Close-report header (Annex 3)","CI001":"Aggregated data per holder","CI002":"Incidents on aggregates",
+  "EI000":"AnaCredit feedback header","EI001":"AnaCredit person data","EI002":"AnaCredit risk data","EI003":"AnaCredit anomalies",
+  "BP000":"Mass-send header (basic)","DP000":"Mass-send header (dynamic)"
+};
+
+/* ---------- error / notification knowledge base (seed) ------------------ */
+const KB_SEED = [
+ {code:"CM999",family:"Message result",severity:"accept",desc:"Message accepted. One reply record is returned for every record the message contained, each marked accepted.",action:"No action. Archive the return file as proof of acceptance.",source:"GNR-IE2021.04 §6.2.1 / GTR & CRG message results"},
+ {code:"CM998",family:"Message result",severity:"reject",desc:"Message accepted WITH rejected records. The same return file contains one record per declared record, flagged accepted or rejected.",action:"Filter this file for rejected records, fix each cause (see the R/L codes attached to them) and resend only the corrected records.",source:"GNR-IE2021.04 §6.2.1"},
+ {code:"CM997",family:"Message result",severity:"reject",desc:"Message-level problem reported by BdE (per your team's notes: 'check the errors'). The message was not cleanly assimilated.",action:"Review the whole return file; verify header (A2000/00/AB000), reference, ordering and record lengths before resending. Confirm exact meaning against the current manual version.",source:"Team notes + BdE message-result family"},
+ {code:"C9999",family:"Record result (GNR)",severity:"accept",desc:"Record accepted. For code requests (A2001/A2002), the assigned non-resident CIRBE code is returned in the 'Código de no residente' field.",action:"Store the returned code; use it in all future declarations for this person.",source:"GNR-IE2021.04 §6.2"},
+ {code:"C9998",family:"Record result (GNR)",severity:"reject",desc:"Record rejected for a reason not catalogued in the instruction. The 200-char 'Texto aclaratorio' after the first notification code holds a free-text explanation from BdE.",action:"Read the explanatory text in the record, correct accordingly and resend. If unclear, contact cir.codificacion@bde.es.",source:"GNR-IE2021.04 §6.2"},
+ {code:"RM006",family:"Message rejection (RM)",severity:"message",desc:"Message rejected: records are not ordered by entity and record type, or the block structure (header + detail) is invalid.",action:"Re-sort records in the order given by the record-type table (A2000→A2005 / 00→80) and resend the whole message.",source:"GNR-IE2021.04 §5.1"},
+ {code:"RM035",family:"Message rejection (RM)",severity:"message",desc:"Message-level validation introduced in CRG v08.x (assimilation control).",action:"Whole message rejected — correct and resend the full file. Check exact text in CRG manual §8.1.",source:"CRG-IE2013.07 §8.1"},
+ {code:"R5075",family:"Record rejection (R)",severity:"reject",desc:"A variation record (A2003/A2004 or type 22/62) contains data in a field whose '$' variation indicator is NOT set. Only fields preceded by '$' are read.",action:"Put '$' in the indicator position before every field you change; blank out untouched fields, then resend.",source:"GNR-IE2021.04 §3.7"},
+ {code:"NC001",family:"Notification (GNR)",severity:"informative",desc:"Name change of a non-resident person; the reason is in the explanatory text (record A2050).",action:"Update the person's name in your systems and in future declarations.",source:"GNR-IE2021.04 §6.2.7"},
+ {code:"NC002",family:"Notification (GNR)",severity:"informative",desc:"Name change of a non-resident person (record A2050).",action:"Update the person's name in your systems.",source:"GNR-IE2021.04 §6.2.7"},
+ {code:"R*", family:"Record rejection (R)",severity:"reject",desc:"R-codes are formal validations that REJECT the individual record (wrong format, value outside list, mandatory field empty, inconsistent dates/amounts…). The record was not loaded.",action:"Fix the named field in the source record and resend just that record. Field-by-field rules: CRG manual §8.2 (per record type) or GNR §8.2.",source:"CRG-IE2013.07 §8.2 / GNR §8.2"},
+ {code:"L*", family:"Pending correction (L)",severity:"pending",desc:"L-codes are cross-module consistency checks (CRG §8.3) that leave the operation PENDING CORRECTION. The data is held but the operation/person pair may be blocked from the monthly return (Annex 3) until fixed. Example from your notes: L2619 — derecognition (baja) of transactions.",action:"Correct before the monthly close (deadline in type-95 / CRGCIE notices). Cross-check the modules named in the validation (B1/B2/C1…).",source:"CRG-IE2013.07 §8.3 & §3.11"},
+ {code:"A*", family:"Warning / anomaly (A)",severity:"informative",desc:"A-codes are warnings (avisos) or anomaly notices. They normally do not reject the record but signal data BdE considers doubtful.",action:"Review; correct in the next declaration if BdE is right, otherwise document why your value stands.",source:"CRG-IE2013.07 §9"},
+ {code:"RM*",family:"Message rejection (RM)",severity:"message",desc:"RM-codes reject the ENTIRE message at assimilation (bad header, wrong length, wrong order, duplicate reference…). Nothing in the file was processed.",action:"Fix the file-level problem and resend the complete message.",source:"CRG-IE2013.07 §8.1 / GNR §8.1"},
+ {code:"IN003",family:"CRGLIS notice",severity:"informative",desc:"General informative notice on the state of the operations declarations and of the operations themselves.",action:"Read the notice text; it often announces close dates and pending-incident reminders.",source:"CRG-IE2013.07 §6.8.2"},
+ {code:"IN004",family:"CRGLIS notice",severity:"pending",desc:"Incident detected in the operations declaration (no additional data attached).",action:"Identify the operation referenced and correct via CRGOPE/CRGCCE.",source:"CRG-IE2013.07 §6.8.3"},
+ {code:"IN005",family:"CRGLIS notice",severity:"pending",desc:"Incident in the operations declaration with additional data attached.",action:"Use the attached data to locate and fix the record.",source:"CRG-IE2013.07 §6.8.4"},
+ {code:"TYPE61",family:"GTR flow",severity:"pending",desc:"Type 61 — BdE asks you to CONFIRM person data: a disparity (code already registered under another name) or discrepancy (name already registered under another code). Fields to confirm are marked '$'. Operations of this person are NOT consolidated until resolved.",action:"Check your records. Wrong code → send type 23 (baja) + 21 (alta) with the right code. Wrong name → send type 62 with the correct name. If you stand by your data → send type 62 confirming it AND post the supporting documentation to the CIR.",source:"GTR-IE2004.01 §4.5"},
+ {code:"TYPE86",family:"GTR flow",severity:"pending",desc:"Type 86 — BdE changed a person's code (duplicate NIF or identification problem). The new code must be used from now on.",action:"Send type 23 (baja of the old code) + type 21 (alta with the new code), and update your master data.",source:"GTR-IE2004.01 §4.5"},
+ {code:"TYPE87",family:"GTR flow",severity:"pending",desc:"Type 87 — BdE notifies the recommended value (institutional sector, legal-procedure status…). Per your notes also used around interest-rate table context.",action:"Send a type 22 variation adopting the recommended value (it also appears in the reserved 'recommended sector' field of replies).",source:"GTR-IE2004.01 §4.5"},
+ {code:"TYPE88",family:"GTR flow",severity:"accept",desc:"Type 88 — record ACCEPTED. 'Datos mensaje' begins with 'ACEPTADO' and names the original record type.",action:"Mark the person movement as registered at BdE.",source:"GTR-IE2004.01 §5.2.16"},
+ {code:"TYPE90",family:"GTR flow",severity:"informative",desc:"Type 90 — assimilation result of your GTRTTE message (total acceptance, partial, or total rejection).",action:"If not fully accepted, locate the rejected records in the same GTRTTS file.",source:"GTR-IE2004.01 §4.5"},
+ {code:"TYPE95",family:"GTR flow",severity:"informative",desc:"Type 95 — expected close date for each data type. Declarations are accepted until 14:00 on the business day BEFORE the close date.",action:"Plan corrections of pending (L-code) items before this date.",source:"GTR-IE2004.01 §4.5"},
+ {code:"RECHAZADO",family:"GTR flow",severity:"reject",desc:"GTRTTS echoes your record (types 21–62) with 'RECHAZADO' in 'Datos mensaje'; erroneous fields are marked with '*'. The whole record was rejected.",action:"Fix the '*'-marked fields and resend the record in the next GTRTTE.",source:"GTR-IE2004.01 §4.5"},
+ {code:"ACEPTADO",family:"GTR flow",severity:"accept",desc:"Acceptance text in BdE reply ('Datos mensaje' starts with ACEPTADO).",action:"No action.",source:"GTR-IE2004.01 §4.5"},
+ {code:"DISPARIDAD",family:"GTR flow",severity:"pending",desc:"Disparity: the person code you declared already exists at the CIR under a DIFFERENT name (the CIR's name appears in the message data).",action:"If your code is wrong → baja (23). If your name is wrong → type 62 with the CIR's name. If you stand by your data → type 62 + documentation.",source:"GTR-IE2004.01 §4.5"},
+ {code:"DISCREPANCIA",family:"GTR flow",severity:"pending",desc:"Discrepancy: the NAME you declared already exists at the CIR under a DIFFERENT code (the CIR's code appears in the message data).",action:"Wrong code → alta (21) with new code + baja (23) of the wrong one. Wrong name → type 62 with correct name. Standing by your data → type 62 + documentation.",source:"GTR-IE2004.01 §4.5"},
+ /* Team conventions captured from your Outlook notes — edit freely */
+ {code:"RT30",family:"Team note",severity:"team",desc:"GNR/B-module record 30 (basic data). Team note: errors here are to be fixed by BdE side.",action:"Escalate to BdE (cirbe.comunicacion.entidades@bde.es) per team convention; verify against current manual.",source:"Team Outlook notes 2024-10-31"},
+ {code:"RT31",family:"Team note",severity:"team",desc:"Record 31 (dynamic data table). Team note: errors are fixed internally (Alex).",action:"Assign to the internal owner; correct and resend.",source:"Team Outlook notes 2024-10-31"},
+ {code:"RT32",family:"Team note",severity:"team",desc:"Record 32 (links with counterparties and transactions). Team note: search the customer's code.",action:"Look up the customer/CIRBE code before resending the link record.",source:"Team Outlook notes 2024-10-31"},
+ {code:"RT39",family:"Team note",severity:"team",desc:"Record 39 (interest-rate related table). Team note: 'without errors — OK, zero errors'.",action:"No action when reported clean.",source:"Team Outlook notes 2024-10-31"},
+ {code:"L1123",family:"CRGLIS notice (L)",severity:"informative",desc:"A type T55/T59/T60 link involving the named operations was removed because the 'Código que se vincula' already exists as an operation.",action:"Informational — verify the link is no longer needed; re-declare correctly if it should exist.",source:"CRG-IE2013.07 §9 (CRGLIS IN004)"},
+ {code:"L1124",family:"CRGLIS notice (L)",severity:"pending",desc:"The operation code in 'Código vinculado' is not declared, so the link could not be made.",action:"Declare the missing operation first, then resend the link record.",source:"CRG-IE2013.07 §9"},
+ {code:"L1125",family:"CRGLIS notice (L)",severity:"pending",desc:"The operation code appears in more than one T55/T59/T60 link as the code being linked.",action:"Remove the duplicate link so the code is linked only once.",source:"CRG-IE2013.07 §9"},
+ {code:"L1126",family:"CRGLIS notice (L)",severity:"informative",desc:"C4 data for the named holder/operation were derecognised (baja) at period close because the holder is not declared in B1 with a 100% joint-holder nature.",action:"If C4 should remain, declare the holder in B1 with the correct solidary nature before the next close.",source:"CRG-IE2013.07 §9"},
+ {code:"L1127",family:"CRGLIS notice (L)",severity:"informative",desc:"A T55/T59/T60 link involving the named operations was applied.",action:"Informational — no action.",source:"CRG-IE2013.07 §9"},
+ {code:"L1129",family:"CRGLIS notice (L)",severity:"informative",desc:"C2 data for the named holder/operation were derecognised (baja) at period close because the holder is declared in B1 with a direct-holder nature.",action:"If C2 should remain, review the holder's nature in B1.",source:"CRG-IE2013.07 §9"},
+ {code:"L1139",family:"CRGLIS notice (L)",severity:"informative",desc:"The link between 'Código de la transferencia' and 'Código de la operación transferida' was derecognised (baja).",action:"Informational — confirm the transfer link is no longer required.",source:"CRG-IE2013.07 §9"},
+ {code:"L1194",family:"CRGLIS notice (L)",severity:"informative",desc:"A link between operations was derecognised (baja).",action:"Informational — no action unless the link should persist.",source:"CRG-IE2013.07 §9"},
+ {code:"L1207",family:"CRGLIS notice (L)",severity:"informative",desc:"A type T74 link for the named operation code was created at period close with 'Código de contrato' equal to 'Código de operación'.",action:"Informational — no action.",source:"CRG-IE2013.07 §9"},
+ {code:"L1222",family:"CRGLIS notice (L)",severity:"informative",desc:"The C1 part 2 and C1 part 4 data of the named operation were derecognised (baja) at period close. Appears in your IN004 operation records ending …NOT1L1222.",action:"Informational close action. If those C1 blocks should still be reported, re-declare them via CRGDEC/CRGCCE before the next close.",source:"CRG-IE2013.07 §9, p.451 (CRGLIS IN004)"},
+ {code:"L1032",family:"CRGLIS notice (L)",severity:"accept",desc:"For declared collateral data there are no pending inconsistencies to resolve (CRGLIS type IN006).",action:"No action — collateral declaration is clean.",source:"CRG-IE2013.07 §9 (CRGLIS IN006)"},
+ {code:"L1045",family:"CRGLIS notice (L)",severity:"pending",desc:"Besides items already communicated, there are more errors in collateral data pending resolution (CRGLIS type IN006).",action:"Review remaining collateral errors and correct before close.",source:"CRG-IE2013.07 §9 (CRGLIS IN006)"}
+];
+
+/* ---------- state -------------------------------------------------------- */
+let state = { files:{}, records:[], runs:[], kb:null, entity:"", settings:{skipInfo:true, leanRaw:true} };
+let dataVer = 0;                              /* bumped whenever records change → caches rebuild */
+function loadState(){
+  try{ const raw = store.get("cirbeSentinel"); if(raw){ const s=JSON.parse(raw); state = Object.assign(state,s);} }catch(e){}
+  if(!state.settings) state.settings={skipInfo:true, leanRaw:true};
+  if(!state.kb || !state.kb.length) state.kb = JSON.parse(JSON.stringify(KB_SEED));
+  else { /* merge in any newly-shipped seed codes the user doesn't have yet */
+    const have=new Set(state.kb.map(k=>k.code));
+    let added=0; for(const s of KB_SEED){ if(!have.has(s.code)){ state.kb.push(JSON.parse(JSON.stringify(s))); added++; } }
+    if(added){ try{ store.set("cirbeSentinel", JSON.stringify(state)); }catch(e){} }
+  }
+}
+function saveState(){ try{ store.set("cirbeSentinel", JSON.stringify(state)); }catch(e){ toast("Could not persist to browser storage — use Export in Settings."); } }
+
+/* ---------- helpers ------------------------------------------------------ */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let toastTimer=null;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),3500); }
+function fmtDate(d){ if(!d) return ""; return d.length===8 ? d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6,8) : d; }
+function nowIso(){ return new Date().toISOString().replace("T"," ").slice(0,19); }
+
+/* ---------- filename classification -------------------------------------- */
+const PROC_RE = /^(CIRCRGOPS|CIRCRGDES|CRGOPE|CRGDEC|CRGCCE|CRGDAR|GTRTTE|GNRNRR|CRGOPS|CRGDES|CRGCCS|CRGDAE|CRGLIS|CRGCIE|CRGCIR|CRGEUR|CRGFLE|CRGFRE|CRGPMA|GTRTTS|GNRNRE|CRGCCS|CRGDES|CRGCIR)/i;
+function classifyName(name){
+  const m = name.toUpperCase().match(PROC_RE);
+  let proc = m ? m[1] : null;
+  if(proc==="CIRCRGOPS") proc="CRGOPS";
+  if(proc==="CIRCRGDES") proc="CRGDES";
+  const dm = name.match(/(20\d{6})/);
+  return { proc, dir: proc&&PROCESSES[proc]?PROCESSES[proc].dir:null, date: dm?dm[1]:null };
+}
+
+/* ---------- record extraction -------------------------------------------- */
+const TYPE5_RE = /^(A20\d{2}|AB000|AD000|AR000|AS000|AT00\d|AI000|BP000|DP000|DC0\d{2}|DD0\d{2}|DB0\d{2}|DE010|DF01\d|DG0\d{2}|DGC\d{2}|DH0\d{2}|DT00\d|BB0\d{2}|BD0\d{2}|BE010|BF01\d|BG010|RB00\d|ZB99\d|ZD990|ZH99\d|ZT990|IN0\d{2}|EU0\d{2}|CI00\d|EI00\d)/;
+const GTR2 = new Set(["00","21","22","23","41","43","44","45","46","47","61","62","80","85","86","87","88","89","90","95"]);
+const HEADER_TYPES = new Set(["A2000","AB000","AD000","AR000","AS000","AT000","AT001","AT002","AI000","IN000","EU000","EU050","EI000","BP000","DP000","DC000","DD000","DG011","DH000","DH001","DH002","DT000","00"]);
+const CODE_RE = /(CM99\d|C99\d{2}|RM\d{3}|R\d{4}|L\d{4}|A\d{4}|NC\d{3}|IN0\d{2})/g;
+const CIRBE_CODE_RE = /\b(ES[A-Z0-9]\d{7}[A-Z0-9]|[A-Z]{2}\d{9})\b/g; /* ESA12345678, ES12345678Z, NG008763558 … */
+
+function detectType(line){
+  const t5 = line.slice(0,5);
+  if(TYPE5_RE.test(t5)) return t5;
+  const t2 = line.slice(0,2);
+  if(/^\d{2}$/.test(t2) && GTR2.has(t2)) return t2;
+  return null;
+}
+function extractCodes(line, type){
+  const codes = new Set(); let m;
+  const body = line.slice(type ? type.length : 0);
+  CODE_RE.lastIndex = 0;
+  while((m = CODE_RE.exec(body))){
+    const c = m[1];
+    const before = body.slice(Math.max(0,m.index-4), m.index);
+    const prev = body[m.index-1];
+    const okBoundary = !prev || /[^A-Za-z0-9]/.test(prev) || /[A-Z]{2,3}\d$/.test(before);
+    if(!okBoundary) continue;                      /* inside an operation/holder code → ignore */
+    if(/^A20\d{2}$/.test(c)) continue;             /* record type, not a code */
+    if(/^IN00[03]$/.test(c)) continue;             /* IN000/IN003 are record/header types */
+    codes.add(c);
+  }
+  if(/RECHAZAD/i.test(line)) codes.add("RECHAZADO");
+  if(/ACEPTAD/i.test(line))  codes.add("ACEPTADO");
+  if(/DISPARIDAD/i.test(line)) codes.add("DISPARIDAD");
+  if(/DISCREPANCIA/i.test(line)) codes.add("DISCREPANCIA");
+  return [...codes];
+}
+function extractKeys(line){
+  const keys = new Set(); let m;
+  CIRBE_CODE_RE.lastIndex = 0;
+  while((m = CIRBE_CODE_RE.exec(line))) keys.add(m[1]);
+  return [...keys];
+}
+function guessName(line, type){
+  /* longest run of letters+spaces ≥ 6 chars after the type — usually the person/entity name */
+  const body = line.slice(type ? type.length : 0);
+  const runs = body.match(/[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ /.&'-]{5,}/g) || [];
+  runs.sort((a,b)=>b.length-a.length);
+  return runs[0] ? runs[0].trim().replace(/\s{2,}/g," ").slice(0,60) : "";
+}
+function recordStatus(dir, type, codes){
+  if(type && HEADER_TYPES.has(type)){
+    if(codes.includes("CM999")) return "ACCEPTED";
+    if(codes.includes("CM998")||codes.includes("CM997")) return "REJECTED";
+    if(codes.some(c=>/^RM\d{3}$/.test(c))) return "REJECTED";
+    return "INFO";
+  }
+  if(dir==="OUT") return "SENT";
+  if(codes.includes("C9999")||codes.includes("ACEPTADO")||type==="88") return "ACCEPTED";
+  if(codes.includes("C9998")||codes.includes("RECHAZADO")) return "REJECTED";
+  if(codes.some(c=>/^R\d{4}$/.test(c)||/^RM\d{3}$/.test(c))) return "REJECTED";
+  if(codes.some(c=>/^L\d{4}$/.test(c))||["61","86","87","89"].includes(type)||codes.includes("DISPARIDAD")||codes.includes("DISCREPANCIA")){
+    /* refine using the knowledge base: a known close-action L-code marked accept/informative is not a to-do */
+    const known = codes.map(c=>kbFind(c)).filter(Boolean);
+    if(known.length && known.every(k=>k.severity==="accept"||k.severity==="informative")) return "INFO";
+    return "PENDING";
+  }
+  if(type && /^IN0(0[45789]|1[34679]|20|22)$/.test(type)) return "PENDING";
+  return "INFO";
+}
+
+function parseFileContent(text, fmeta){
+  const lines = text.split(/\r?\n/);
+  const all = [];
+  for(let i=0;i<lines.length;i++){
+    const line = lines[i];
+    if(!line.trim()) continue;
+    const type = detectType(line);
+    const codes = extractCodes(line, type);
+    const keys  = extractKeys(line);
+    const status = recordStatus(fmeta.dir, type, codes);
+    if(!type && !codes.length && !keys.length) continue;   /* noise line */
+    all.push({
+      id: fmeta.key+"#"+i,
+      file: fmeta.name, fileKey: fmeta.key, lineNo: i+1,
+      proc: fmeta.proc, dir: fmeta.dir, fileDate: fmeta.date,
+      type: type||"?", typeLabel: RECTYPES[type]||"",
+      status, codes, keys, name: guessName(line, type),
+      raw: line.slice(0,400)
+    });
+  }
+  const counts = tally(all);
+  const s = state.settings||{};
+  let recs = all;
+  if(s.skipInfo) recs = recs.filter(r=>r.status!=="INFO" || HEADER_TYPES.has(r.type)); /* keep headers (CM999/CM998 proof) */
+  if(s.leanRaw) for(const r of recs){ if(r.status!=="REJECTED" && r.status!=="PENDING"){ r.raw=""; r.name=r.name.slice(0,40); } }
+  return { recs, counts };
+}
+
+/* ---------- folder access ------------------------------------------------ */
+let dirOut=null, dirIn=null;
+async function pickFolder(which){
+  if(!window.showDirectoryPicker){ toast("This browser does not support folder access. Use Edge/Chrome locally, or 'Add files manually…'."); return; }
+  try{
+    const h = await window.showDirectoryPicker({mode:"read"});
+    if(which==="out"){ dirOut=h; $("#chipOut").textContent=h.name; $("#dotOut").classList.add("on"); }
+    else { dirIn=h; $("#chipIn").textContent=h.name; $("#dotIn").classList.add("on"); }
+    toast("Folder connected: "+h.name);
+  }catch(e){ /* user cancelled */ }
+}
+async function* walk(dirHandle, path){
+  for await (const entry of dirHandle.values()){
+    const p = path+"/"+entry.name;
+    if(entry.kind==="file") yield {entry, path:p};
+    else if(entry.kind==="directory") yield* walk(entry, p);
+  }
+}
+function isCandidate(name){
+  const up = name.toUpperCase();
+  if(!PROC_RE.test(up)) return false;
+  return /\.TXT$/i.test(name) || /\.\d+$/.test(name) || !/\./.test(name) || /\.DAT$/i.test(name);
+}
+
+/* ---------- update run --------------------------------------------------- */
+async function runUpdate(){
+  if(!dirOut && !dirIn){ toast("Connect at least one folder first (or use 'Add files manually…')."); return; }
+  $("#btnUpdate").disabled = true; $("#btnUpdate").textContent="Scanning…";
+  let newFiles=0, newRecords=0, rejected=0, accepted=0, pending=0, skipped=0;
+  try{
+    for(const h of [dirOut, dirIn]){
+      if(!h) continue;
+      for await (const {entry, path} of walk(h, h.name)){
+        if(!isCandidate(entry.name)){ continue; }
+        const f = await entry.getFile();
+        const key = path+"|"+f.size+"|"+f.lastModified;
+        if(state.files[key]){ skipped++; continue; }
+        const cls = classifyName(entry.name);
+        if(!cls.proc){ continue; }
+        const text = await f.text();
+        const fmeta = { key, name:entry.name, path, size:f.size, mtime:f.lastModified,
+                        proc:cls.proc, dir:cls.dir, date:cls.date, readAt:nowIso() };
+        const parsed = parseFileContent(text, fmeta);
+        fmeta.counts = parsed.counts;
+        state.files[key]=fmeta;
+        state.records.push(...parsed.recs);
+        newFiles++; newRecords+=parsed.recs.length;
+        accepted+=fmeta.counts.ACCEPTED||0; rejected+=fmeta.counts.REJECTED||0; pending+=fmeta.counts.PENDING||0;
+        if(newFiles%200===0){ $("#btnUpdate").textContent=`Scanning… ${newFiles} new files`; await new Promise(r=>setTimeout(r,0)); }
+      }
+    }
+    state.runs.unshift({at:nowIso(), newFiles, newRecords, accepted, rejected, pending, skipped});
+    if(state.runs.length>200) state.runs.length=200;
+    dataVer++;
+    saveState(); renderAll();
+    toast(newFiles?`Update done: ${newFiles} new file(s), ${newRecords} record(s) · ${rejected} rejected · ${pending} pending. ${skipped} file(s) already processed.`:`No new files. ${skipped} already-processed file(s) skipped.`);
+  }catch(e){ console.error(e); toast("Update failed: "+e.message); }
+  $("#btnUpdate").disabled=false; $("#btnUpdate").textContent="⟳ Update — read new files";
+}
+function tally(recs){ const t={}; for(const r of recs) t[r.status]=(t[r.status]||0)+1; return t; }
+
+/* manual file import (fallback when folder API unavailable) */
+$("#btnImportFiles").addEventListener("click",()=>$("#hiddenFiles").click());
+$("#hiddenFiles").addEventListener("change", async e=>{
+  let n=0, nr=0;
+  for(const f of e.target.files){
+    const key = "manual/"+f.name+"|"+f.size+"|"+f.lastModified;
+    if(state.files[key]) continue;
+    const cls = classifyName(f.name); if(!cls.proc) continue;
+    const text = await f.text();
+    const fmeta = {key,name:f.name,path:"manual/"+f.name,size:f.size,mtime:f.lastModified,proc:cls.proc,dir:cls.dir,date:cls.date,readAt:nowIso()};
+    const parsed = parseFileContent(text,fmeta); fmeta.counts=parsed.counts;
+    state.files[key]=fmeta; state.records.push(...parsed.recs); n++; nr+=parsed.recs.length;
+  }
+  state.runs.unshift({at:nowIso(), newFiles:n, newRecords:nr, manual:true});
+  dataVer++;
+  saveState(); renderAll(); toast(`${n} file(s) imported, ${nr} record(s).`);
+  e.target.value="";
+});
+
+/* ---------- KB lookup ----------------------------------------------------- */
+function kbFind(code){
+  let hit = state.kb.find(k=>k.code===code);
+  if(hit) return hit;
+  if(/^R\d{4}$/.test(code))  return Object.assign({code,inherited:true}, state.kb.find(k=>k.code==="R*"));
+  if(/^L\d{4}$/.test(code))  return Object.assign({code,inherited:true}, state.kb.find(k=>k.code==="L*"));
+  if(/^A\d{4}$/.test(code))  return Object.assign({code,inherited:true}, state.kb.find(k=>k.code==="A*"));
+  if(/^RM\d{3}$/.test(code)) return Object.assign({code,inherited:true}, state.kb.find(k=>k.code==="RM*"));
+  return null;
+}
+function sevOfCode(code){ const k=kbFind(code); if(!k) return "warn";
+  return k.severity==="accept"?"ok":(k.severity==="reject"||k.severity==="message")?"err":(k.severity==="pending")?"warn":"" }
+
+/* ---------- rendering ----------------------------------------------------- */
+function renderAll(){ renderKpis(); renderLanes(); renderDashLists(); renderFiles(); renderRecords(); renderRecon(); renderKb(); renderRunlog();
+  $("#lastRun").textContent = state.runs[0] ? "last update "+state.runs[0].at : ""; }
+
+function renderKpis(){
+  const agg={ACCEPTED:0,REJECTED:0,PENDING:0,INFO:0}; let nf=0, sentRecs=0;
+  for(const f of Object.values(state.files)){
+    nf++; const c=f.counts||{};
+    if(f.dir==="OUT") sentRecs += Object.values(c).reduce((a,b)=>a+b,0);
+    agg.ACCEPTED+=c.ACCEPTED||0; agg.REJECTED+=c.REJECTED||0; agg.PENDING+=c.PENDING||0; agg.INFO+=c.INFO||0;
+  }
+  $("#kpis").innerHTML = `
+    <div class="kpi"><div class="n">${nf}</div><div class="l">Files tracked</div></div>
+    <div class="kpi kpi-link" data-kstatus="SENT" title="Show sent records"><div class="n">${sentRecs}</div><div class="l">Records sent</div></div>
+    <div class="kpi ok kpi-link" data-kstatus="ACCEPTED" title="Filter: accepted"><div class="n">${agg.ACCEPTED}</div><div class="l">Accepted by BdE</div></div>
+    <div class="kpi bad kpi-link" data-kstatus="REJECTED" title="Filter: rejected"><div class="n">${agg.REJECTED}</div><div class="l">Rejected</div></div>
+    <div class="kpi warn kpi-link" data-kstatus="PENDING" title="Filter: pending"><div class="n">${agg.PENDING}</div><div class="l">Pending correction</div></div>
+    <div class="kpi"><div class="n">${agg.INFO}</div><div class="l">Informative${(state.settings||{}).skipInfo?" (counted, not stored)":""}</div></div>`;
+}
+
+function renderLanes(){
+  const byDay = {};
+  for(const f of Object.values(state.files)){
+    const d = f.date || (f.mtime? new Date(f.mtime).toISOString().slice(0,10).replace(/-/g,""):"unknown");
+    (byDay[d]=byDay[d]||[]).push(f);
+  }
+  const days = Object.keys(byDay).sort();
+  const lanes = $("#lanes");
+  if(!days.length){ lanes.innerHTML='<div class="empty">Connect your folders and press Update. New files are read once; existing files are never re-read.</div>'; return; }
+  lanes.innerHTML = days.slice(-21).map(d=>{
+    const fs = byDay[d];
+    const chips = fs.map(f=>{
+      const cls = f.dir==="OUT" ? "out" : "in "+((f.counts&&f.counts.REJECTED)?"bad":(f.counts&&f.counts.ACCEPTED)?"ok":"");
+      const arrow = f.dir==="OUT"?"↑":"↓";
+      return `<span class="lanechip ${cls}" title="${esc(f.name)}">${arrow} ${esc(f.proc)}</span>`;
+    }).join("");
+    return `<div class="daycol">${chips}<div class="d">${fmtDate(d)}</div></div>`;
+  }).join("");
+}
+
+function codeChips(codes){
+  return codes.map(c=>`<span class="codechip ${sevOfCode(c)}" data-code="${esc(c)}">${esc(c)}</span>`).join("");
+}
+function statusChip(s){ const m={ACCEPTED:"acc",REJECTED:"rej",PENDING:"pend",INFO:"info",SENT:"sent"}; return `<span class="chip ${m[s]||"info"}">${s}</span>`; }
+
+function renderDashLists(){
+  const probs = state.records.filter(r=>r.status==="REJECTED"||r.status==="PENDING").slice(-40).reverse();
+  $("#dashProblems").innerHTML = probs.length ? `<div class="tablewrap" style="max-height:300px"><table>
+    <tr><th>File date</th><th>Type</th><th>Key / name</th><th>Status</th><th>Codes</th></tr>
+    ${probs.map(r=>`<tr class="clickable" data-rid="${esc(r.id)}"><td class="mono">${fmtDate(r.fileDate)||""}</td>
+      <td class="mono" title="${esc(r.typeLabel)}">${esc(r.type)}</td>
+      <td>${esc(r.keys[0]||r.name||"")}</td><td>${statusChip(r.status)}</td><td>${codeChips(r.codes)}</td></tr>`).join("")}
+  </table></div>` : '<div class="empty">No rejected or pending records. 🎉</div>';
+}
+
+function renderRunlog(){
+  $("#runlog").innerHTML = state.runs.length ? state.runs.map(r=>
+    `<div>${esc(r.at)} — ${r.newFiles} new file(s), ${r.newRecords} rec · <span style="color:var(--green)">${r.accepted||0} acc</span> · <span style="color:var(--claret)">${r.rejected||0} rej</span> · <span style="color:var(--amber)">${r.pending||0} pend</span>${r.manual?" (manual)":""}</div>`).join("")
+    : '<div class="empty" style="padding:10px">No runs yet.</div>';
+}
+
+function fillSelect(sel, values, keep){
+  const cur = sel.value;
+  sel.innerHTML = sel.options[0].outerHTML + values.map(v=>`<option>${esc(v)}</option>`).join("");
+  if(keep) sel.value = cur;
+}
+
+/* file-level verdict from its record counts */
+function fileVerdict(f){
+  const c=f.counts||{};
+  if((c.REJECTED||0)>0) return "REJECTED";
+  if((c.PENDING||0)>0)  return "PENDING";
+  if((c.ACCEPTED||0)>0) return "ACCEPTED";
+  return f.dir==="OUT" ? "SENT" : "INFO";
+}
+function dInput(id){ const v=$("#"+id).value; return v? v.replace(/-/g,"") : null; }  /* YYYY-MM-DD → YYYYMMDD */
+function fDate(f){ return f.date || (f.mtime? new Date(f.mtime).toISOString().slice(0,10).replace(/-/g,"") : ""); }
+const sortState = { files:{col:"date",asc:false} };
+function sortTh(label,col,cur){ const arrow=cur.col===col?(cur.asc?" ▲":" ▼"):""; return `<th class="sortable" data-sort="${col}" style="cursor:pointer" title="Click to sort">${label}${arrow}</th>`; }
+
+function renderFiles(){
+  const procs=[...new Set(Object.values(state.files).map(f=>f.proc))].sort();
+  fillSelect($("#fFileProc"), procs, true);
+  const q=($("#fFileSearch").value||"").toLowerCase(), dir=$("#fFileDir").value, pr=$("#fFileProc").value,
+        vd=$("#fFileVerdict").value, from=dInput("fFileFrom"), to=dInput("fFileTo");
+  let fs = Object.values(state.files).filter(f=>{
+    const d=fDate(f);
+    return (!q||f.name.toLowerCase().includes(q))&&(!dir||f.dir===dir)&&(!pr||f.proc===pr)
+        &&(!vd||fileVerdict(f)===vd)&&(!from||d>=from)&&(!to||d<=to);
+  });
+  const ss=sortState.files, dirMul=ss.asc?1:-1;
+  const val=f=>{ const c=f.counts||{}; switch(ss.col){
+    case "date": return fDate(f)+String(f.mtime||0).padStart(14,"0");
+    case "proc": return f.proc; case "file": return f.name.toLowerCase(); case "dir": return f.dir;
+    case "verdict": return fileVerdict(f);
+    case "records": return Object.values(c).reduce((a,b)=>a+b,0);
+    case "acc": return c.ACCEPTED||0; case "rej": return c.REJECTED||0; case "pend": return c.PENDING||0; case "info": return c.INFO||0;
+    case "readAt": return f.readAt||""; default: return fDate(f); } };
+  fs.sort((a,b)=>{ const x=val(a),y=val(b); return (x<y?-1:x>y?1:0)*dirMul; });
+  $("#tblFiles").innerHTML = `<tr>${sortTh("Date","date",ss)}${sortTh("Dir","dir",ss)}${sortTh("Process","proc",ss)}${sortTh("File","file",ss)}${sortTh("Result","verdict",ss)}${sortTh("Records","records",ss)}${sortTh("Acc","acc",ss)}${sortTh("Rej","rej",ss)}${sortTh("Pend","pend",ss)}${sortTh("Info","info",ss)}${sortTh("Read at","readAt",ss)}</tr>`+
+   (fs.length? fs.map(f=>{const c=f.counts||{};const tot=Object.values(c).reduce((a,b)=>a+b,0);
+     return `<tr><td class="mono">${fmtDate(fDate(f))||""}</td>
+     <td>${f.dir==="OUT"?'<span class="chip info">SENT ↑</span>':'<span class="chip sent">RECV ↓</span>'}</td>
+     <td class="mono" title="${esc((PROCESSES[f.proc]||{}).label||"")}">${esc(f.proc)}</td>
+     <td class="mono" title="${esc(f.path)}">${esc(f.name)}</td>
+     <td>${statusChip(fileVerdict(f))}</td>
+     <td>${tot}</td><td style="color:var(--green)">${c.ACCEPTED||0}</td><td style="color:var(--claret)">${c.REJECTED||0}</td><td style="color:var(--amber)">${c.PENDING||0}</td><td class="muted">${c.INFO||0}</td>
+     <td class="mono muted">${esc(f.readAt||"")}</td></tr>`}).join("") : `<tr><td colspan="11"><div class="empty">No files match.</div></td></tr>`);
+}
+
+let openDetail=null;
+/* status filter chips: 0=off, 1=include, -1=exclude */
+const STATUSES=["ACCEPTED","REJECTED","PENDING","INFO","SENT"];
+const statusFilter={};
+function renderStatusChips(){
+  $("#recStatusChips").innerHTML = STATUSES.map(s=>{
+    const v=statusFilter[s]||0, cls=v===1?"inc":v===-1?"exc":"";
+    return `<span class="fchip ${cls}" data-st="${s}">${s}</span>`;
+  }).join("");
+}
+function recMatchesStatus(st){
+  const inc=STATUSES.filter(s=>statusFilter[s]===1);
+  if(statusFilter[st]===-1) return false;
+  if(inc.length) return inc.includes(st);
+  return true;
+}
+function searchTokens(q){
+  return q.toUpperCase().split(/\s+/).filter(Boolean).map(t=>({neg:t.startsWith("-"), t:t.replace(/^-/,"")})).filter(x=>x.t);
+}
+function recText(r){ return (r.raw+" "+r.codes.join(" ")+" "+r.keys.join(" ")+" "+(r.name||"")+" "+r.proc+" "+r.type+" "+r.file).toUpperCase(); }
+function renderRecords(){
+  const procs=[...new Set(state.records.map(r=>r.proc))].sort();
+  const types=[...new Set(state.records.map(r=>r.type))].sort();
+  fillSelect($("#fRecProc"),procs,true); fillSelect($("#fRecType"),types,true);
+  renderStatusChips();
+  const toks=searchTokens($("#fRecSearch").value||""), pr=$("#fRecProc").value, ty=$("#fRecType").value,
+        from=dInput("fRecFrom"), to=dInput("fRecTo");
+  let rs = state.records.filter(r=>{
+    if(!recMatchesStatus(r.status)) return false;
+    if(pr&&r.proc!==pr) return false; if(ty&&r.type!==ty) return false;
+    if(from&&(r.fileDate||"")<from) return false; if(to&&(r.fileDate||"99999999")>to) return false;
+    if(toks.length){ const txt=recText(r);
+      for(const k of toks){ const hit=txt.includes(k.t); if(k.neg?hit:!hit) return false; } }
+    return true;
+  });
+  rs.sort((a,b)=>(b.fileDate||"").localeCompare(a.fileDate||""));
+  rs = rs.slice(0,1500);
+  $("#tblRecords").innerHTML = `<tr><th>File date</th><th>Process</th><th>Type</th><th>Key</th><th>Name</th><th>Status</th><th>Codes</th></tr>`+
+   (rs.length? rs.map(r=>{
+     const open = openDetail===r.id;
+     return `<tr class="clickable" data-rid="${esc(r.id)}">
+       <td class="mono">${fmtDate(r.fileDate)||""}</td><td class="mono">${esc(r.proc)}</td>
+       <td class="mono" title="${esc(r.typeLabel)}">${esc(r.type)}</td>
+       <td class="mono">${esc(r.keys[0]||"")}</td><td>${esc(r.name||"")}</td>
+       <td>${statusChip(r.status)}</td><td>${codeChips(r.codes)}</td></tr>`+
+       (open?`<tr><td colspan="7"><div class="detail">${recordDetail(r)}</div></td></tr>`:"");
+   }).join("") : `<tr><td colspan="7"><div class="empty">No records match.</div></td></tr>`);
+}
+function recordDetail(r){
+  const kbHtml = r.codes.map(c=>{
+    const k = kbFind(c);
+    return k ? `<div class="kbcard"><span class="sev ${esc(k.severity)}">${esc(k.severity)}</span><span class="code">${esc(c)}</span> <span class="fam">· ${esc(k.family)}${k.inherited?" (family rule)":""}</span><div style="margin-top:4px">${esc(k.desc)}</div><div class="act">→ ${esc(k.action)}</div><div class="src">${esc(k.source||"")}</div></div>`
+             : `<div class="kbcard"><span class="code">${esc(c)}</span> <span class="fam">· unknown</span><div style="margin-top:4px">Not in the knowledge base yet. Check the official manual (Settings → sources), then add it under the Error knowledge base tab so it is remembered.</div></div>`;
+  }).join("");
+  return `<b>${esc(r.type)}</b> — ${esc(r.typeLabel||"unidentified record")} · file <span class="mono">${esc(r.file)}</span>, line ${r.lineNo}
+    ${r.keys.length?`<div style="margin-top:4px">Keys: ${r.keys.map(k=>`<span class="codechip">${esc(k)}</span>`).join("")}</div>`:""}
+    ${r.raw?`<div class="raw">${esc(r.raw)}</div>`:`<div class="muted" style="margin:6px 0;font-size:12px">Raw text not stored for this status (lean storage is on — see Settings).</div>`}${kbHtml}`;
+}
+
+let reconCache = {ver:-1, groups:null};
+function buildReconGroups(){
+  if(reconCache.ver===dataVer && reconCache.groups) return reconCache.groups;
+  const groups={};
+  for(const r of state.records){
+    for(const k of r.keys){
+      const g = groups[k]=groups[k]||{key:k,name:"",sent:0,acc:0,rej:0,pend:0,lastStatus:"SENT",lastDate:"",codes:new Set()};
+      if(r.name && r.name.length>(g.name||"").length) g.name=r.name;
+      if(r.dir==="OUT") g.sent++;
+      if(r.status==="ACCEPTED")g.acc++; if(r.status==="REJECTED")g.rej++; if(r.status==="PENDING")g.pend++;
+      r.codes.forEach(c=>g.codes.add(c));
+      const d=r.fileDate||"";
+      if(d>=g.lastDate && r.dir==="IN" && r.status!=="INFO"){ g.lastDate=d; g.lastStatus=r.status; }
+      else if(!g.lastDate && r.dir==="OUT"){ g.lastStatus="SENT"; }
+    }
+  }
+  reconCache={ver:dataVer, groups:Object.values(groups)};
+  return reconCache.groups;
+}
+function renderRecon(){
+  const q=($("#fReconSearch").value||"").toUpperCase(), st=$("#fReconStatus").value;
+  let gs=buildReconGroups();
+  gs=gs.filter(g=>(!q||g.key.includes(q)||g.name.toUpperCase().includes(q))&&(!st||g.lastStatus===st));
+  gs.sort((a,b)=>({REJECTED:0,PENDING:1,SENT:2,ACCEPTED:3,INFO:4}[a.lastStatus]-{REJECTED:0,PENDING:1,SENT:2,ACCEPTED:3,INFO:4}[b.lastStatus])||b.lastDate.localeCompare(a.lastDate));
+  $("#tblRecon").innerHTML = `<tr><th>Key (CIRBE / NIF)</th><th>Name</th><th>Sent</th><th>Acc</th><th>Rej</th><th>Pend</th><th>Latest BdE status</th><th>Codes seen</th></tr>`+
+   (gs.length? gs.slice(0,800).map(g=>`<tr><td class="mono">${esc(g.key)}</td><td>${esc(g.name)}</td>
+     <td>${g.sent}</td><td style="color:var(--green)">${g.acc}</td><td style="color:var(--claret)">${g.rej}</td><td style="color:var(--amber)">${g.pend}</td>
+     <td>${statusChip(g.lastStatus)} <span class="mono muted">${fmtDate(g.lastDate)}</span></td><td>${codeChips([...g.codes].slice(0,8))}</td></tr>`).join("")
+    : `<tr><td colspan="8"><div class="empty">No keyed records yet.</div></td></tr>`);
+}
+
+/* ---------- KB tab -------------------------------------------------------- */
+function renderKb(){
+  const fams=[...new Set(state.kb.map(k=>k.family))].sort();
+  fillSelect($("#fKbFam"),fams,true);
+  const q=($("#fKbSearch").value||"").toLowerCase(), fam=$("#fKbFam").value;
+  const ks = state.kb.filter(k=>(!fam||k.family===fam)&&(!q||k.code.toLowerCase().includes(q)||k.desc.toLowerCase().includes(q)||k.action.toLowerCase().includes(q)));
+  $("#kbList").innerHTML = ks.length ? ks.map((k)=>`
+    <div class="kbcard"><span class="sev ${esc(k.severity)}">${esc(k.severity)}</span>
+      <span class="code">${esc(k.code)}</span> <span class="fam">· ${esc(k.family)}</span>
+      <div style="margin-top:4px">${esc(k.desc)}</div>
+      <div class="act">→ ${esc(k.action)}</div>
+      <div class="src">${esc(k.source||"")} · <a href="#" data-kbedit="${esc(k.code)}">edit</a> · <a href="#" data-kbdel="${esc(k.code)}">delete</a></div>
+    </div>`).join("") : '<div class="empty">No matching codes.</div>';
+}
+function kbForm(existing){
+  const code = prompt("Code (e.g. R2345, L2619, RM006, TYPE86):", existing?existing.code:""); if(!code) return;
+  const family = prompt("Family:", existing?existing.family:"Record rejection (R)")||"Custom";
+  const severity = prompt("Severity — accept / reject / pending / informative / message / team:", existing?existing.severity:"reject")||"reject";
+  const desc = prompt("Description (what it means):", existing?existing.desc:"")||"";
+  const action = prompt("Suggested action (how to fix):", existing?existing.action:"")||"";
+  const source = prompt("Source (manual section / who told you):", existing?existing.source:"")||"";
+  const i = state.kb.findIndex(k=>k.code===code.trim());
+  const entry = {code:code.trim(),family,severity,desc,action,source};
+  if(i>=0) state.kb[i]=entry; else state.kb.unshift(entry);
+  saveState(); renderKb(); toast("Knowledge base saved: "+entry.code);
+}
+$("#btnKbAdd").addEventListener("click",()=>kbForm(null));
+$("#btnKbBulk").addEventListener("click",()=>{ const p=$("#kbBulkPanel"); p.style.display = p.style.display==="none"?"block":"none"; });
+$("#btnKbBulkCancel").addEventListener("click",()=>{ $("#kbBulkPanel").style.display="none"; });
+$("#btnKbBulkRun").addEventListener("click",()=>{
+  const text=$("#kbBulkText").value, fam=$("#kbBulkFam").value.trim()||"Imported", overwrite=$("#kbBulkOverwrite").checked;
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const codeRe=/\b(CM99\d|C99\d{2}|RM\d{3}|R\d{4}|L\d{4}|A\d{4}|NC\d{3}|TYPE\d{2}|RT\d{2}|IN0\d{2})\b/;
+  let added=0, updated=0, skipped=0, current=null;
+  const have=new Map(state.kb.map(k=>[k.code,k]));
+  function guessSev(t){ const s=t.toLowerCase();
+    if(/sin errores|no hay inconsistencias|aceptad|ok\b/.test(s)) return "accept";
+    if(/rechaz/.test(s)) return "reject";
+    if(/baja|pendiente|no es posible|no figura|debe |corr/.test(s)) return "pending";
+    return "informative"; }
+  for(const line of lines){
+    const m=line.match(codeRe);
+    if(m){
+      const code=m[1];
+      let desc=line.slice(line.indexOf(code)+code.length).replace(/^[:.\s)-]+/,"").trim();
+      const entry={code,family:fam,severity:guessSev(line),desc,action:"",source:"Pasted from manual"};
+      const existing=have.get(code);
+      if(existing){ if(overwrite){ Object.assign(existing,entry); current=existing; updated++; } else { skipped++; current=null; } }
+      else { state.kb.unshift(entry); have.set(code,entry); current=entry; added++; }
+    } else if(current){ /* continuation line → append to last description */
+      current.desc=(current.desc+" "+line).trim();
+    }
+  }
+  // rebuild index map is unnecessary; persist & render
+  dataVer++; saveState(); renderKb();
+  $("#kbBulkText").value=""; $("#kbBulkPanel").style.display="none";
+  toast(`Imported: ${added} new, ${updated} updated, ${skipped} skipped (already present).`);
+});
+$("#kbList").addEventListener("click",e=>{
+  const ed=e.target.getAttribute("data-kbedit"), dl=e.target.getAttribute("data-kbdel");
+  if(ed){ e.preventDefault(); kbForm(state.kb.find(k=>k.code===ed)); }
+  if(dl){ e.preventDefault(); if(confirm("Delete "+dl+" from the knowledge base?")){ state.kb=state.kb.filter(k=>k.code!==dl); saveState(); renderKb(); } }
+});
+$("#btnKbExport").addEventListener("click",()=>download("cirbe_error_kb.json", JSON.stringify(state.kb,null,2)));
+$("#btnKbImport").addEventListener("click",()=>{ jsonImportMode="kb"; $("#hiddenJson").click(); });
+
+/* ---------- DB helper ------------------------------------------------------ */
+function parseTable(txt){
+  const rows = txt.trim().split(/\r?\n/).map(l=>l.split(l.includes("\t")?"\t":l.includes(";")?";":","));
+  return rows;
+}
+$("#dbPaste").addEventListener("input",()=>{
+  const rows=parseTable($("#dbPaste").value); const sel=$("#dbKeyCol"); sel.innerHTML="";
+  if(rows.length&&rows[0].length) rows[0].forEach((h,i)=>sel.insertAdjacentHTML("beforeend",`<option value="${i}">${esc(h.trim())}</option>`));
+});
+$("#btnDbAnalyze").addEventListener("click",()=>{
+  const rows=parseTable($("#dbPaste").value); if(rows.length<2){ $("#dbResult").innerHTML='<div class="empty">Need a header row plus data rows.</div>'; return; }
+  const col=+$("#dbKeyCol").value||0; const header=rows[0];
+  const out=rows.slice(1).map(r=>{
+    const key=(r[col]||"").trim().toUpperCase(); if(!key) return null;
+    const hits=state.records.filter(rec=>rec.keys.some(k=>k.includes(key)||key.includes(k))||rec.raw.toUpperCase().includes(key));
+    const c=tally(hits);
+    return {key,row:r,hits:hits.length,acc:c.ACCEPTED||0,rej:c.REJECTED||0,pend:c.PENDING||0,
+      codes:[...new Set(hits.flatMap(h=>h.codes))].slice(0,6),
+      last: hits.length? hits[hits.length-1].status : "—"};
+  }).filter(Boolean);
+  $("#dbResult").innerHTML = `<div class="tablewrap" style="max-height:420px"><table>
+   <tr><th>${esc(header[col]||"Key")}</th><th>Tracked records</th><th>Acc</th><th>Rej</th><th>Pend</th><th>Last status</th><th>Codes</th></tr>
+   ${out.map(o=>`<tr><td class="mono">${esc(o.key)}</td><td>${o.hits}</td><td style="color:var(--green)">${o.acc}</td><td style="color:var(--claret)">${o.rej}</td><td style="color:var(--amber)">${o.pend}</td><td>${o.last==="—"?'<span class="muted">not in any file</span>':statusChip(o.last)}</td><td>${codeChips(o.codes)}</td></tr>`).join("")}
+  </table></div>
+  <p class="muted" style="margin-top:8px;font-size:12px">${out.filter(o=>!o.hits).length} key(s) never appeared in any tracked file — likely not yet declared, or declared under a different code.</p>`;
+});
+
+/* ---------- line inspector ------------------------------------------------ */
+function segmentLine(line){
+  const segs=[]; const re=/\S+/g; let m;
+  while((m=re.exec(line))){
+    const tok=m[0], start=m.index+1, end=m.index+tok.length;
+    let guess="text";
+    if(/^20\d{6}$/.test(tok)) guess="date (YYYYMMDD)";
+    else if(/^20\d{4}$/.test(tok)) guess="period (YYYYMM)";
+    else if(/^(ES[A-Z0-9]\d{7}[A-Z0-9]|[A-Z]{2}\d{9})$/.test(tok)) guess="CIRBE / NIF code";
+    else if(/^\d+$/.test(tok)) guess="numeric";
+    else if(/\$/.test(tok)) guess="contains '$' variation marker(s)";
+    else if(/^[A-ZÁÉÍÓÚÑ .,&'-]+$/.test(tok)) guess="name / text";
+    segs.push({start,end,tok,guess});
+  }
+  return segs;
+}
+function inspectLine(line, dir){
+  const type=detectType(line);
+  const codes=extractCodes(line,type);
+  const keys=extractKeys(line);
+  const status=recordStatus(dir,type,codes);
+  const dates=[...new Set((line.match(/20\d{6}/g)||[]))];
+  const periods=[...new Set((line.match(/(?<!\d)20\d{4}(?!\d)/g)||[]))].filter(p=>!dates.some(d=>d.startsWith(p)));
+  const dollars=(line.match(/\$/g)||[]).length;
+  let html=`<div class="kbcard"><span class="sev ${status==="REJECTED"?"reject":status==="PENDING"?"pending":status==="ACCEPTED"?"accept":"informative"}">${status}</span>
+    <span class="code">${esc(type||"?")}</span> <span class="fam">· ${esc(RECTYPES[type]||"record type not in catalogue")}</span>`;
+  if(type&&HEADER_TYPES.has(type)) html+=`<div class="muted" style="margin-top:4px;font-size:12px">This is a header/control record — the codes here describe the whole message.</div>`;
+  html+=`</div>`;
+  if(codes.length){
+    html+=`<h3 style="margin:10px 0 6px">Codes found</h3>`+codes.map(c=>{
+      const k=kbFind(c);
+      return k?`<div class="kbcard"><span class="sev ${esc(k.severity)}">${esc(k.severity)}</span><span class="code">${esc(c)}</span> <span class="fam">· ${esc(k.family)}${k.inherited?" (family rule)":""}</span><div style="margin-top:4px">${esc(k.desc)}</div><div class="act">→ ${esc(k.action)}</div><div class="src">${esc(k.source||"")}</div></div>`
+        :`<div class="kbcard"><span class="code">${esc(c)}</span> <span class="fam">· unknown</span><div style="margin-top:4px">Not in the knowledge base. Find it in the manual (CRG §8–9 / GTR §6 / GNR §8) and add it via “Paste codes from manual…” in the Error knowledge base tab, then press ↺ Re-evaluate statuses.</div></div>`;
+    }).join("");
+  } else html+=`<p class="muted" style="margin:8px 0">No validation/notification codes detected in this line.</p>`;
+  const facts=[];
+  if(keys.length) facts.push(`<b>Keys:</b> ${keys.map(k=>`<span class="codechip">${esc(k)}</span>`).join("")}`);
+  if(dates.length) facts.push(`<b>Dates:</b> ${dates.map(d=>fmtDate(d)).join(", ")}`);
+  if(periods.length) facts.push(`<b>Periods:</b> ${periods.map(p=>p.slice(0,4)+"-"+p.slice(4)).join(", ")}`);
+  if(dollars) facts.push(`<b>'$' markers:</b> ${dollars} — only fields immediately after a '$' are read as changed (variation records).`);
+  if(facts.length) html+=`<div class="detail" style="margin:8px 0">${facts.join("<br>")}</div>`;
+  const segs=segmentLine(line);
+  if(segs.length){
+    html+=`<h3 style="margin:10px 0 6px">Segment map (heuristic — positions are 1-based)</h3>
+    <div class="tablewrap" style="max-height:260px"><table><tr><th>Pos</th><th>Content</th><th>Interpretation</th></tr>`+
+    segs.map(s=>`<tr><td class="mono">${s.start}–${s.end}</td><td class="mono">${esc(s.tok.length>48?s.tok.slice(0,48)+"…":s.tok)}</td><td>${esc(s.guess)}</td></tr>`).join("")+
+    `</table></div><p class="muted" style="font-size:11.5px;margin-top:6px">Exact field positions are defined per record type in the official manuals (links in Settings). Fixed-width fields without spaces appear as one segment.</p>`;
+  }
+  return html;
+}
+$("#btnInspect").addEventListener("click",()=>{
+  const lines=$("#insText").value.split(/\r?\n/).map(l=>l.replace(/\s+$/,"")).filter(l=>l.trim());
+  if(!lines.length){ $("#insResult").innerHTML='<div class="empty">Paste at least one line.</div>'; return; }
+  const dir=$("#insDir").value;
+  $("#insResult").innerHTML = lines.map((l,i)=>(lines.length>1?`<h3 style="margin:${i?14:0}px 0 6px">Line ${i+1}</h3>`:"")+inspectLine(l,dir)).join("");
+});
+
+/* ---------- export / import / reset --------------------------------------- */
+function download(name, content){
+  const b=new Blob([content],{type:"application/json"}); const u=URL.createObjectURL(b);
+  const a=document.createElement("a"); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u);
+}
+$("#btnExportState").addEventListener("click",()=>download("cirbe_sentinel_state_"+new Date().toISOString().slice(0,10)+".json", JSON.stringify(state,null,1)));
+let jsonImportMode="state";
+$("#btnImportState").addEventListener("click",()=>{ jsonImportMode="state"; $("#hiddenJson").click(); });
+$("#hiddenJson").addEventListener("change", e=>{
+  const f=e.target.files[0]; if(!f) return;
+  f.text().then(t=>{ try{
+    const obj=JSON.parse(t);
+    if(jsonImportMode==="kb"){ if(Array.isArray(obj)){ state.kb=obj; toast("Knowledge base imported."); } }
+    else { state=Object.assign(state,obj); if(!state.settings)state.settings={skipInfo:true,leanRaw:true}; dataVer++; toast("State imported."); }
+    saveState(); renderAll();
+  }catch(err){ toast("Invalid JSON: "+err.message); } });
+  e.target.value="";
+});
+$("#btnReset").addEventListener("click",()=>{
+  if(confirm("Delete the full register, run log and custom KB entries? Export a backup first if unsure.")){
+    state={files:{},records:[],runs:[],kb:JSON.parse(JSON.stringify(KB_SEED)),entity:"",settings:state.settings||{skipInfo:true,leanRaw:true}}; dataVer++; reconCache={ver:-1,groups:null};
+    store.del("cirbeSentinel"); saveState(); renderAll(); toast("Everything reset.");
+  }
+});
+$("#btnSaveEntity").addEventListener("click",()=>{ state.entity=$("#setEntity").value.trim(); saveState(); toast("Entity saved."); });
+$("#btnRefreshSeed").addEventListener("click",()=>{
+  const have=new Set(state.kb.map(k=>k.code)); let added=0;
+  for(const s of KB_SEED){ if(!have.has(s.code)){ state.kb.push(JSON.parse(JSON.stringify(s))); added++; } }
+  dataVer++; saveState(); renderKb();
+  $("#seedCount").textContent=`${state.kb.length} codes in bank (+${added} new).`;
+  toast(added?`${added} built-in code(s) added.`:"All built-in codes already present.");
+});
+
+/* ---------- events --------------------------------------------------------- */
+$("#btnPickOut").addEventListener("click",()=>pickFolder("out"));
+$("#btnPickIn").addEventListener("click",()=>pickFolder("in"));
+$("#btnUpdate").addEventListener("click",runUpdate);
+$("#tabs").addEventListener("click",e=>{
+  const b=e.target.closest(".tab"); if(!b) return;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t===b));
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="v-"+b.dataset.v));
+});
+function debounce(fn,ms){ let t; return ()=>{ clearTimeout(t); t=setTimeout(fn,ms); }; }
+const dRenderFiles=debounce(renderFiles,180), dRenderRecords=debounce(renderRecords,180),
+      dRenderRecon=debounce(renderRecon,180), dRenderKb=debounce(renderKb,120);
+["fFileSearch","fFileDir","fFileProc","fFileVerdict","fFileFrom","fFileTo"].forEach(id=>$("#"+id).addEventListener("input",dRenderFiles));
+["fRecSearch","fRecProc","fRecType","fRecFrom","fRecTo"].forEach(id=>$("#"+id).addEventListener("input",dRenderRecords));
+$("#recStatusChips").addEventListener("click",e=>{
+  const ch=e.target.closest(".fchip"); if(!ch) return;
+  const s=ch.dataset.st, v=statusFilter[s]||0;
+  statusFilter[s] = v===0?1 : v===1?-1 : 0;     /* off → include → exclude → off */
+  renderRecords();
+});
+/* re-evaluate stored records against current rules + knowledge base */
+$("#btnReeval").addEventListener("click",()=>{
+  let changed=0;
+  for(const r of state.records){
+    const ns=recordStatus(r.dir, r.type==="?"?null:r.type, r.codes);
+    if(ns!==r.status){
+      const f=state.files[r.fileKey];
+      if(f&&f.counts){ f.counts[r.status]=Math.max(0,(f.counts[r.status]||0)-1); f.counts[ns]=(f.counts[ns]||0)+1; }
+      r.status=ns; changed++;
+    }
+  }
+  dataVer++; saveState(); renderAll();
+  toast(changed?`Re-evaluated: ${changed.toLocaleString()} record(s) changed status.`:"Re-evaluated: no status changes.");
+});
+$("#tblFiles").addEventListener("click",e=>{
+  const th=e.target.closest("th.sortable"); if(!th) return;
+  const col=th.dataset.sort, ss=sortState.files;
+  if(ss.col===col) ss.asc=!ss.asc; else { ss.col=col; ss.asc=(col==="file"||col==="proc"); }
+  renderFiles();
+});
+/* KPI cards act as quick status filters → Records tab */
+$("#kpis").addEventListener("click",e=>{
+  const k=e.target.closest(".kpi-link"); if(!k) return;
+  document.querySelector('[data-v="records"]').click();
+  STATUSES.forEach(s=>statusFilter[s]=0);
+  statusFilter[k.dataset.kstatus]=1;
+  renderRecords();
+});
+/* storage settings */
+function applySettingsUI(){ $("#chkSkipInfo").checked=!!state.settings.skipInfo; $("#chkLeanRaw").checked=!!state.settings.leanRaw; }
+$("#chkSkipInfo").addEventListener("change",e=>{ state.settings.skipInfo=e.target.checked; saveState(); renderKpis(); });
+$("#chkLeanRaw").addEventListener("change",e=>{ state.settings.leanRaw=e.target.checked; saveState(); });
+$("#btnCompact").addEventListener("click",()=>{
+  const before=state.records.length;
+  if(state.settings.skipInfo) state.records=state.records.filter(r=>r.status!=="INFO"||HEADER_TYPES.has(r.type));
+  if(state.settings.leanRaw) for(const r of state.records){ if(r.status!=="REJECTED"&&r.status!=="PENDING"){ r.raw=""; if(r.name)r.name=r.name.slice(0,40);} }
+  dataVer++; saveState(); renderAll();
+  $("#compactStats").textContent=`${before.toLocaleString()} → ${state.records.length.toLocaleString()} records kept.`;
+  toast(`Compacted: ${(before-state.records.length).toLocaleString()} informative record(s) removed; raw text trimmed.`);
+});
+["fReconSearch","fReconStatus"].forEach(id=>$("#"+id).addEventListener("input",dRenderRecon));
+["fKbSearch","fKbFam"].forEach(id=>$("#"+id).addEventListener("input",dRenderKb));
+document.body.addEventListener("click",e=>{
+  const chip=e.target.closest(".codechip[data-code]");
+  if(chip){ /* jump to KB */ document.querySelector('[data-v="kb"]').click(); $("#fKbSearch").value=chip.dataset.code.replace(/^(R|L|A)\d{4}$/,m=>m); renderKb(); return; }
+  const row=e.target.closest("tr.clickable[data-rid]");
+  if(row){ openDetail = openDetail===row.dataset.rid? null : row.dataset.rid;
+    /* if clicked on dashboard, jump to records tab */
+    if(row.closest("#dashProblems")){ document.querySelector('[data-v="records"]').click(); $("#fRecSearch").value=""; }
+    renderRecords();
+    const el=document.querySelector(`#tblRecords tr[data-rid="${CSS.escape(openDetail||"")}"]`); if(el) el.scrollIntoView({block:"center"});
+  }
+});
+$("#btnExportRecCsv").addEventListener("click",()=>{
+  const head="fileDate,process,direction,recordType,typeLabel,status,key,name,codes,file,line";
+  const rows=state.records.map(r=>[r.fileDate,r.proc,r.dir,r.type,r.typeLabel,r.status,(r.keys[0]||""),(r.name||"").replace(/,/g," "),r.codes.join("|"),r.file,r.lineNo].join(","));
+  download("cirbe_records.csv",[head,...rows].join("\n"));
+});
+
+/* ---------- boot ------------------------------------------------------------ */
+loadState();
+applySettingsUI();
+$("#setEntity") && ($("#setEntity").value = state.entity||"");
+renderAll();
+</script>
+</body>
+</html>
