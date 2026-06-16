@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CIRBE Compass — plain-language tracker for your Banco de España files</title>
+<style>
+  :root{
+    --bg:#F4F2EC; --panel:#FFFFFF; --ink:#1F2730; --ink2:#5B6672; --line:#E3DFD4;
+    --brand:#0E5A4E; --brand2:#0B463C; --brandsoft:#E3F0EC;
+    --green:#1B7A4B; --greensoft:#E6F2EA; --amber:#9A6700; --ambersoft:#FBF3DF;
+    --red:#9E2A2B; --redsoft:#F6E6E5; --blue:#2A5A8E; --bluesoft:#E7EFF7;
+    --serif:"Iowan Old Style",Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5}
+  a{color:var(--brand)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 18px 80px}
+  header.top{background:var(--brand);color:#fff;padding:14px 0;border-bottom:3px solid var(--brand2)}
+  header.top .wrap{display:flex;align-items:center;gap:12px}
+  .logo{font-family:var(--serif);font-size:22px;font-weight:600;letter-spacing:.2px}
+  .logo small{font-family:var(--sans);font-weight:400;font-size:12.5px;opacity:.85;margin-left:8px}
+  .top .spacer{flex:1}
+  .top button{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer}
+  .top button:hover{background:rgba(255,255,255,.24)}
+  #jsok{font-size:12px;opacity:.9}
+
+  /* step strip */
+  .steps{display:flex;gap:0;margin:18px 0 6px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+  .step{flex:1;padding:12px 14px;display:flex;align-items:center;gap:10px;border-right:1px solid var(--line);position:relative}
+  .step:last-child{border-right:none}
+  .step .num{width:26px;height:26px;border-radius:50%;background:var(--line);color:var(--ink2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:0 0 auto}
+  .step .t{font-size:13.5px}
+  .step .t b{display:block;font-size:14px}
+  .step .t span{color:var(--ink2);font-size:12px}
+  .step.active{background:var(--brandsoft)}
+  .step.active .num{background:var(--brand);color:#fff}
+  .step.done .num{background:var(--green);color:#fff}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  h2.sec{font-family:var(--serif);font-size:20px;margin:0 0 2px}
+  .sub{color:var(--ink2);font-size:13px;margin:0 0 14px}
+  .btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 15px;font-size:14px;cursor:pointer;color:var(--ink)}
+  .btn:hover{border-color:var(--brand);color:var(--brand)}
+  .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .btn.primary:hover{background:var(--brand2);color:#fff}
+  .btn.big{padding:12px 20px;font-size:15px}
+  .btn.small{padding:5px 10px;font-size:12.5px}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--brand);text-decoration:underline}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.danger{color:var(--red);border-color:var(--redsoft)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+  /* welcome */
+  .welcome h1{font-family:var(--serif);font-size:26px;margin:0 0 8px}
+  .welcome p{max-width:760px;color:var(--ink2);margin:0 0 14px}
+  .welcome .big-actions{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0 8px}
+  .what{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+  .what .card{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .what .card b{display:block;margin-bottom:4px}
+  .what .card span{font-size:13px;color:var(--ink2)}
+
+  /* folder chips */
+  .folderbar{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+  .folder{flex:1;min-width:260px;border:1px dashed var(--line);border-radius:10px;padding:12px 14px;background:var(--bg)}
+  .folder .lab{font-size:12px;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px}
+  .folder .name{font-family:var(--mono);font-size:13px;margin-top:4px;word-break:break-all}
+  .folder.connected{border-style:solid;border-color:var(--green);background:var(--greensoft)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#CDC8BB;margin-right:6px;vertical-align:middle}
+  .dot.on{background:var(--green)}
+
+  /* summary cards */
+  .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .scard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer}
+  .scard:hover{border-color:var(--brand)}
+  .scard .n{font-size:30px;font-weight:700;font-family:var(--serif);line-height:1}
+  .scard .l{font-size:12.5px;color:var(--ink2);margin-top:6px}
+  .scard.todo .n{color:var(--red)}
+  .scard.ok .n{color:var(--green)}
+  .scard.wait .n{color:var(--blue)}
+  .scard.files .n{color:var(--ink)}
+
+  /* tabs */
+  .nav{display:flex;gap:4px;margin:16px 0 0;flex-wrap:wrap}
+  .nav button{background:transparent;border:none;border-bottom:3px solid transparent;padding:10px 14px;font-size:14.5px;cursor:pointer;color:var(--ink2)}
+  .nav button.active{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+  .nav button:hover{color:var(--brand)}
+
+  .view{display:none}
+  .view.active{display:block}
+
+  /* tables */
+  .tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#FAF9F5;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2);position:sticky;top:0;cursor:default}
+  tr:last-child td{border-bottom:none}
+  tr.click{cursor:pointer}
+  tr.click:hover td{background:var(--brandsoft)}
+  .mono{font-family:var(--mono)}
+  .muted{color:var(--ink2)}
+  .empty{padding:30px;text-align:center;color:var(--ink2)}
+
+  /* status pills (plain language) */
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .pill.reject{background:var(--redsoft);color:var(--red)}
+  .pill.pend{background:var(--ambersoft);color:var(--amber)}
+  .pill.ok{background:var(--greensoft);color:var(--green)}
+  .pill.sent{background:var(--bluesoft);color:var(--blue)}
+  .pill.info{background:#EEECE4;color:var(--ink2)}
+  .pill.partial{background:#FBE7D6;color:#A24E12}
+  .pill.resolved{background:var(--greensoft);color:var(--green)}
+  .pill.openrej{background:var(--redsoft);color:var(--red)}
+  .pill.openpend{background:var(--ambersoft);color:var(--amber)}
+  .pill.await{background:var(--bluesoft);color:var(--blue)}
+
+  .codepill{display:inline-block;padding:1px 7px;border-radius:5px;font-family:var(--mono);font-size:11.5px;background:#EEECE4;color:var(--ink);margin:1px 2px;cursor:pointer}
+  .codepill.r{background:var(--redsoft);color:var(--red)} .codepill.l{background:var(--ambersoft);color:var(--amber)} .codepill.a{background:var(--bluesoft);color:var(--blue)} .codepill.ok{background:var(--greensoft);color:var(--green)}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+  input[type=search],input[type=text],select{font:inherit;font-size:14px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+  input[type=search]{min-width:240px}
+  label.lbl{font-size:13px;color:var(--ink2)}
+
+  /* keylink */
+  .keylink{color:var(--brand);text-decoration:underline;text-decoration-style:dotted;cursor:pointer;font-family:var(--mono)}
+  .keylink:hover{text-decoration-style:solid}
+
+  /* dossier overlay */
+  #dossier{display:none;position:fixed;inset:0;background:rgba(20,28,36,.5);z-index:50;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto}
+  #dossier .box{background:var(--panel);border-radius:12px;max-width:900px;width:100%;padding:18px 22px;box-shadow:0 16px 50px rgba(0,0,0,.3)}
+  .timeline{position:relative;margin:8px 0}
+  .ev{display:flex;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .ev:last-child{border-bottom:none}
+  .ev .when{flex:0 0 130px;font-family:var(--mono);font-size:12px;color:var(--ink2)}
+  .ev .what{flex:1}
+  .banner{border-radius:10px;padding:12px 14px;margin:10px 0;font-size:14px}
+  .banner.resolved{background:var(--greensoft);border:1px solid #BFE0CC}
+  .banner.openrej{background:var(--redsoft);border:1px solid #E8C9C8}
+  .banner.openpend{background:var(--ambersoft);border:1px solid #E8D9A8}
+  .banner.await{background:var(--bluesoft);border:1px solid #C7D9EC}
+
+  /* help */
+  .help h3{font-family:var(--serif);font-size:16px;margin:16px 0 6px}
+  .help p,.help li{color:var(--ink2);font-size:14px}
+  .help .legend{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .help .legend .item{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
+
+  .scan{font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:10px;display:none}
+  #errbar{display:none;background:var(--redsoft);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:10px 14px;margin:10px 0;font-family:var(--mono);font-size:12.5px;white-space:pre-wrap}
+  .hint{font-size:12px;color:var(--ink2);margin-top:6px}
+  .kbcard{border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;background:var(--panel)}
+  .kbcard .code{font-family:var(--mono);font-weight:700}
+  .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:8px}
+  .tag.reject{background:var(--redsoft);color:var(--red)} .tag.pend{background:var(--ambersoft);color:var(--amber)} .tag.info{background:var(--bluesoft);color:var(--blue)} .tag.ok{background:var(--greensoft);color:var(--green)} .tag.msg{background:#EEE;color:#555}
+  @media(max-width:760px){ .what,.summary{grid-template-columns:1fr 1fr} .steps{flex-direction:column} .step{border-right:none;border-bottom:1px solid var(--line)} }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="logo">CIRBE Compass <small>Banco de España risk-data file tracker</small></div>
+    <div class="spacer"></div>
+    <span id="jsok">starting…</span>
+    <button id="btnHelp">？ How this works</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="errbar"></div>
+
+  <!-- STEP STRIP -->
+  <div class="steps" id="steps">
+    <div class="step" data-step="1"><div class="num">1</div><div class="t"><b>Connect folders</b><span>point to your two CIRBE folders</span></div></div>
+    <div class="step" data-step="2"><div class="num">2</div><div class="t"><b>Update</b><span>read new files</span></div></div>
+    <div class="step" data-step="3"><div class="num">3</div><div class="t"><b>Review &amp; track</b><span>see what needs action</span></div></div>
+  </div>
+
+  <!-- CONNECT / WELCOME -->
+  <div class="panel welcome" id="connectPanel">
+    <h1 id="welcomeTitle">Welcome 👋</h1>
+    <p id="welcomeText">This tool reads the CIRBE files you exchange with Banco de España — the ones you send, and the replies that come back — and tells you in plain language which records were <b>accepted</b>, which were <b>rejected</b>, and <b>what to do</b> about each one. Nothing leaves your computer.</p>
+    <div class="folderbar">
+      <div class="folder" id="folderOut">
+        <div class="lab"><span class="dot" id="dotOut"></span>Folder you SEND from (entity → BdE)</div>
+        <div class="name" id="nameOut">not connected</div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="btnPickOut">Connect this folder</button></div>
+      </div>
+      <div class="folder" id="folderIn">
+        <div class="lab"><span class="dot" id="dotIn"></span>Folder you RECEIVE in (BdE → entity)</div>
+        <div class="name" id="nameIn">not connected</div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="btnPickIn">Connect this folder</button></div>
+      </div>
+    </div>
+    <p class="hint">Tip: you can also drag the two folders here straight from Windows Explorer. Or, if your PC blocks folder access, use “Add files” to drop individual files.</p>
+    <div class="big-actions">
+      <button class="btn primary big" id="btnUpdate">⟳ Update — read files now</button>
+      <button class="btn" id="btnAddFiles">Add files…</button>
+      <button class="btn small" id="btnStop" style="display:none">■ Stop</button>
+    </div>
+    <div class="scan" id="scan"></div>
+    <input type="file" id="fileInput" multiple style="display:none">
+    <input type="file" id="jsonInput" style="display:none">
+
+    <div class="what" id="whatGrid">
+      <div class="card"><b>① It reads your files</b><span>Point it at your two folders. It opens each CIRBE / EDITRAN file and understands the records inside.</span></div>
+      <div class="card"><b>② It explains every result</b><span>Each record is shown as Accepted, Rejected, or Pending — with the error code translated into plain English and a suggested fix.</span></div>
+      <div class="card"><b>③ It tracks the full story</b><span>Sent, rejected, resent, finally accepted? Click any record to see its whole timeline and its current state.</span></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD (shown when data exists) -->
+  <div id="dataArea" style="display:none">
+    <div class="panel" id="refreshBar" style="padding:12px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:13px"><b>To read new files:</b> make sure both folders are connected, then press Update.</div>
+      <div style="flex:1"></div>
+      <span class="muted" style="font-size:12.5px"><span class="dot" id="dotOut2"></span><span id="nameOut2">send folder</span></span>
+      <span class="muted" style="font-size:12.5px"><span class="dot" id="dotIn2"></span><span id="nameIn2">receive folder</span></span>
+      <button class="btn small" id="btnReOut">Connect send ↑</button>
+      <button class="btn small" id="btnReIn">Connect receive ↓</button>
+      <button class="btn primary small" id="btnUpdate2">⟳ Update</button>
+      <button class="btn small" id="btnStop2" style="display:none">■ Stop</button>
+    </div>
+    <div class="scan" id="scan2" style="margin-top:0"></div>
+    <div class="summary" id="summary"></div>
+
+    <div class="nav" id="nav">
+      <button data-v="todo" class="active">⚠ Needs action</button>
+      <button data-v="search">Search a record</button>
+      <button data-v="files">Files</button>
+      <button data-v="help">Error help</button>
+      <button data-v="settings">Settings</button>
+    </div>
+
+    <!-- TODO -->
+    <section class="view active" id="v-todo">
+      <div class="panel">
+        <h2 class="sec">What needs your action right now</h2>
+        <p class="sub" id="todoSub">These are records that Banco de España rejected or left pending, and that you have not yet fixed and got accepted. Click any one to see its full history.</p>
+        <div class="filters">
+          <input type="search" id="todoSearch" placeholder="Filter by code, name, process or key…">
+          <select id="todoKind"><option value="">Rejected + pending</option><option value="OPEN_REJECTED">Rejected only</option><option value="OPEN_PENDING">Pending only</option></select>
+          <button class="btn small" id="btnTodoCsv">Export worklist (CSV)</button>
+        </div>
+        <div class="tablewrap"><table id="tblTodo"></table></div>
+      </div>
+    </section>
+
+    <!-- SEARCH -->
+    <section class="view" id="v-search">
+      <div class="panel">
+        <h2 class="sec">Search a record or paste a line</h2>
+        <p class="sub">Type a holder code / NIF / operation code to see its history, or paste one or more raw lines from any file to decode them instantly.</p>
+        <div class="filters">
+          <input type="search" id="recSearch" placeholder="Search key, name, code, file…">
+          <select id="recStatus"><option value="">Any status</option><option>REJECTED</option><option>PENDING</option><option>ACCEPTED</option><option>SENT</option><option>INFO</option></select>
+        </div>
+        <div class="tablewrap"><table id="tblRecords"></table></div>
+        <button class="btn" id="recMore" style="display:none;width:100%;margin-top:10px"></button>
+        <div style="margin-top:18px">
+          <h2 class="sec" style="font-size:16px">Decode a raw line</h2>
+          <textarea id="decodeText" rows="3" style="width:100%;font-family:var(--mono);font-size:12.5px;padding:10px;border:1px solid var(--line);border-radius:8px" placeholder="Paste a line from a CIRBE / EDITRAN file…"></textarea>
+          <div class="row" style="margin-top:8px"><select id="decodeDir"><option value="IN">It is a reply (BdE → you)</option><option value="OUT">It is something you sent (you → BdE)</option></select><button class="btn primary" id="btnDecode">Decode</button></div>
+          <div id="decodeResult"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILES -->
+    <section class="view" id="v-files">
+      <div class="panel">
+        <h2 class="sec">Files read</h2>
+        <p class="sub">Every file found in your folders. Click a file to see the records inside it and its overall result.</p>
+        <div class="filters">
+          <input type="search" id="fileSearch" placeholder="Filter files…">
+          <select id="fileDir"><option value="">Sent + received</option><option value="OUT">Sent</option><option value="IN">Received</option></select>
+          <select id="fileRange"><option value="">Any date</option><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+          <label class="lbl"><input type="checkbox" id="fileGroup"> Group by day</label>
+        </div>
+        <div class="tablewrap"><table id="tblFiles"></table></div>
+      </div>
+    </section>
+
+    <!-- HELP -->
+    <section class="view help" id="v-help">
+      <div class="panel">
+        <h2 class="sec">Error help — what each result means</h2>
+        <p class="sub">A plain-language dictionary of Banco de España result codes. Each says why you got it and how to fix it. Don’t see a code? Add its meaning once and it will be applied everywhere.</p>
+        <div class="legend">
+          <div class="item"><span class="pill reject">Rejected</span> the record was not loaded — fix and resend</div>
+          <div class="item"><span class="pill pend">Pending</span> loaded but inconsistent — correct before month close</div>
+          <div class="item"><span class="pill ok">Accepted</span> all good</div>
+          <div class="item"><span class="pill info">Info</span> a notice or warning — usually no action</div>
+        </div>
+        <div class="filters" style="margin-top:12px">
+          <input type="search" id="kbSearch" placeholder="Search a code or word…">
+          <button class="btn small" id="btnKbAdd">+ Add a code meaning</button>
+          <button class="btn small" id="btnKbPaste">Paste many from the manual…</button>
+        </div>
+        <div id="kbPastePanel" style="display:none;margin:8px 0">
+          <textarea id="kbPasteText" rows="5" style="width:100%;font-family:var(--mono);font-size:12px;padding:10px;border:1px solid var(--line);border-radius:8px" placeholder="Paste lines like:  R2345: el campo fecha no es válido, se rechaza el registro"></textarea>
+          <div class="row" style="margin-top:6px"><button class="btn primary small" id="btnKbPasteRun">Import</button><button class="btn small" id="btnKbPasteCancel">Cancel</button></div>
+        </div>
+        <div id="kbList"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="v-settings">
+      <div class="panel">
+        <h2 class="sec">Settings &amp; backup</h2>
+        <p class="sub">Your data lives only in this browser. Export a backup regularly, or to move it to another PC.</p>
+        <div class="row"><button class="btn" id="btnExport">Export backup (.json)</button><button class="btn" id="btnImport">Import backup</button><button class="btn danger" id="btnReset">Start over (clear all)</button></div>
+        <h3 style="font-family:var(--serif);margin:18px 0 6px;font-size:16px">Reading options</h3>
+        <div style="font-size:14px"><label><input type="checkbox" id="optSkipInfo" checked> Skip purely informational records when reading (recommended — keeps things fast). Rejected and pending records are always kept.</label></div>
+        <div style="font-size:14px;margin-top:6px"><label><input type="checkbox" id="optFast" checked> Fast re-scan: skip files already read (recommended for network folders).</label></div>
+        <div class="row" style="margin-top:12px"><button class="btn small" id="btnReeval">Re-check all statuses</button><button class="btn small" id="btnSelfCheck">Run a consistency check</button></div>
+        <div id="selfCheck"></div>
+        <h3 style="font-family:var(--serif);margin:18px 0 6px;font-size:16px">Official Banco de España sources</h3>
+        <ul style="font-size:13px;color:var(--ink2)">
+          <li>CRG — Declaration of operations risk data (manual V10.15, Nov 2025).</li>
+          <li>GTR — Risk holders / persons. GNR — non-residents.</li>
+          <li>Regulation: Circular 1/2013, last amended by Circular 1/2025 (BOE 29 Dec 2025).</li>
+        </ul>
+        <p class="hint" id="entityLine"></p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- DOSSIER -->
+<div id="dossier"><div class="box"><div class="row" style="justify-content:flex-end"><button class="btn small" id="dossierClose">✕ Close</button></div><div id="dossierBody"></div></div></div>
+
+<script>
+"use strict";
+/* ============================================================ CIRBE Compass ===
+   Single file, zero dependency. Reads CIRBE/EDITRAN files, classifies each
+   record (Accepted / Rejected / Pending), tracks each key's full lifecycle,
+   and explains every code in plain language. Engine logic carried over from the
+   thoroughly-tested predecessor; UI rebuilt fresh around guidance & simplicity.
+   ============================================================================ */
+const VERSION="1.2";
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function fmtDate(d){return d&&d.length===8?d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6,8):(d||"");}
+function nowIso(){return new Date().toISOString().slice(0,19).replace("T"," ");}
+function toast(m){ ["#scan","#scan2"].forEach(s=>{const t=$(s); if(t){t.style.display="block";t.textContent=m;}}); }
+function showFatal(m){ const e=$("#errbar"); if(e){e.style.display="block";e.textContent="Something went wrong: "+m;} }
+
+/* ---------------- domain: processes -------------------------------------- */
+const PROCESSES={
+  CRGOPE:{dir:"OUT",label:"Basic operation data you sent"},
+  CRGDEC:{dir:"OUT",label:"Dynamic (monthly/quarterly) data you sent"},
+  CRGCCE:{dir:"OUT",label:"Corrections / rectifications you sent"},
+  CRGDAR:{dir:"OUT",label:"Good-practices / moratorium data you sent"},
+  GTRTTE:{dir:"OUT",label:"Risk-holder (person) data you sent"},
+  GNRNRR:{dir:"OUT",label:"Non-resident data you sent"},
+  CRGOPS:{dir:"IN",label:"BdE reply on basic operation data"},
+  CRGDES:{dir:"IN",label:"BdE reply on dynamic data"},
+  CRGCCS:{dir:"IN",label:"BdE reply on corrections"},
+  CRGDAE:{dir:"IN",label:"BdE reply on good-practices data"},
+  CRGLIS:{dir:"IN",label:"BdE incident / inconsistency report"},
+  CRGEUR:{dir:"IN",label:"BdE AnaCredit incident report"},
+  CRGCIE:{dir:"IN",label:"BdE monthly aggregated report"},
+  CRGCIR:{dir:"IN",label:"BdE monthly aggregated report (repeat)"},
+  CRGFLE:{dir:"IN",label:"BdE AnaCredit aggregated report"},
+  CRGFRE:{dir:"IN",label:"BdE AnaCredit feedback report"},
+  CRGPMA:{dir:"IN",label:"Data you requested from BdE"},
+  GTRTTS:{dir:"IN",label:"BdE reply on person data"},
+  GNRNRE:{dir:"IN",label:"BdE reply on non-resident data"},
+};
+const PROC_RE=/(CRGOPE|CRGOPS|CRGDEC|CRGDES|CRGCCE|CRGCCS|CRGDAR|CRGDAE|CRGLIS|CRGEUR|CRGCIE|CRGCIR|CRGFLE|CRGFRE|CRGPMA|GTRTTE|GTRTTS|GNRNRR|GNRNRE)/i;
+const HEADER_TYPES=new Set(["AB000","AD000","AI000","DC000","DC011","00","A2000","IN000","IN003","AR000"]);
+const RECTYPES={
+  AB000:"Header — basic data",AD000:"Header — guarantees",DC000:"Header — dynamic data",AR000:"Header — corrections",
+  DB010:"Person–operation relation",DB020:"Basic operation data",DB030:"Loan complementary data",DE010:"Loan interest rate",
+  DF011:"Transfer data",DF012:"Transfer–operation link",DG010:"Code linking",ZB999:"End of basic declaration",
+  DD010:"Operation–guarantee link",DD011:"Guarantee data",DD020:"Real-estate guarantee",DD030:"Financial-asset guarantee",
+  BB010:"Delete person–operation",BB020:"Delete operation",RB001:"Reactivate operation",
+  CI001:"Aggregated holder data",CI002:"Aggregated holder data",
+  "21":"Person — alta (add)","23":"Person — baja (remove)","61":"Disparity to confirm","62":"Your confirmation",
+  "85":"Risk without a declared person","86":"Notice / action","87":"Recommended sector","88":"Accepted","89":"Confirmation pending",
+  A2001:"Non-resident record",A2002:"Non-resident record",
+};
+
+/* ---------------- code extraction (carried over, proven boundary logic) --- */
+const CODE_RE=/(CM99\d|C99\d{2}|RM\d{3}|R\d{4}|L\d{4}|A\d{4}|NC\d{3}|IN0\d{2})/g;
+const KEY_RE=/\b(ES[A-Z0-9]\d{7}[A-Z0-9]|[A-Z]{2}\d{9})\b/g;
+function detectType(line){
+  const m=line.match(/^\s*([A-Z]{2}\d{3}|[A-Z]{1}[A-Z]\d{3}|\d{2})\b/);
+  if(m) return m[1].trim();
+  const m2=line.match(/^([A-Z]{5})/); if(m2) return m2[1];
+  return "?";
+}
+function extractCodes(line,type){
+  const codes=new Set();
+  const body=type&&type!=="?"?line.slice(line.indexOf(type)+type.length):line;
+  let m; CODE_RE.lastIndex=0;
+  while((m=CODE_RE.exec(body))){
+    const c=m[1];
+    const before=body.slice(Math.max(0,m.index-6),m.index);
+    const after=body.slice(m.index+c.length,m.index+c.length+1);
+    const prev=body[m.index-1];
+    const afterClean=!after||/[^A-Za-z0-9]/.test(after);
+    const okBoundary=!prev||/[^A-Za-z0-9]/.test(prev)||/[A-Z]{3}\d$/.test(before)||(/0{4,}$/.test(before)&&afterClean);
+    if(!okBoundary) continue;             /* glued inside an IBAN/op code → ignore */
+    if(/^A20\d{2}$/.test(c)) continue;    /* record type, not a code */
+    if(/^IN00[03]$/.test(c)) continue;    /* header/record type */
+    codes.add(c);
+  }
+  if(/\bRECHAZAD/i.test(line)) codes.add("RECHAZADO");
+  if(/\bACEPTAD/i.test(line)) codes.add("ACEPTADO");
+  if(/\bDISPARIDAD/i.test(line)) codes.add("DISPARIDAD");
+  return [...codes];
+}
+function extractKeys(line){
+  const keys=new Set(); let m; KEY_RE.lastIndex=0;
+  while((m=KEY_RE.exec(line))) keys.add(m[1]);
+  return [...keys];
+}
+function guessName(line,type){
+  const m=line.match(/[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .,'&-]{6,}/);
+  return m?m[0].trim().replace(/\s{2,}/g," ").slice(0,60):"";
+}
+function classifyName(name){
+  const m=name.toUpperCase().match(PROC_RE);
+  const proc=m?m[1].toUpperCase():null;
+  const dm=name.match(/(20\d{6})/);
+  let date=null;
+  if(dm){ const mo=+dm[1].slice(4,6),dy=+dm[1].slice(6,8); if(mo>=1&&mo<=12&&dy>=1&&dy<=31) date=dm[1]; }
+  return {proc,dir:proc&&PROCESSES[proc]?PROCESSES[proc].dir:null,date};
+}
+
+/* ---------------- status engine (KB-driven, carried over) ---------------- */
+function recordStatus(dir,type,codes){
+  if(type&&HEADER_TYPES.has(type)){
+    if(codes.includes("CM999")) return "ACCEPTED";
+    if(codes.includes("CM998")||codes.includes("CM997")) return "REJECTED";
+    if(codes.some(c=>/^RM\d{3}$/.test(c))) return "REJECTED";
+    return "INFO";
+  }
+  const sevs=codes.map(c=>{const k=kbFind(c);return k?k.severity:null;});
+  if(sevs.some(s=>s==="reject"||s==="message")) return "REJECTED";
+  if(codes.includes("C9998")||codes.includes("RECHAZADO")) return "REJECTED";
+  if(codes.some(c=>/^R\d{4}$/.test(c)||/^RM\d{3}$/.test(c)) && !sevs.some(s=>s==="accept"||s==="informative")) return "REJECTED";
+  if(codes.includes("C9999")||codes.includes("ACEPTADO")||type==="88") return "ACCEPTED";
+  if(sevs.some(s=>s==="pending")) return "PENDING";
+  if(dir==="OUT") return "SENT";
+  if(codes.some(c=>/^L\d{4}$/.test(c))||["61","85","86","87","89"].includes(type)||codes.includes("DISPARIDAD")){
+    const known=codes.map(c=>kbFind(c)).filter(Boolean);
+    if(known.length&&known.every(k=>k.severity==="accept"||k.severity==="informative")) return "INFO";
+    return "PENDING";
+  }
+  return "INFO";
+}
+const STATUS_PLAIN={ACCEPTED:"Accepted",REJECTED:"Rejected",PENDING:"Pending",SENT:"Sent — awaiting reply",INFO:"Info",PARTIAL:"Partially accepted"};
+const STATUS_CLASS={ACCEPTED:"ok",REJECTED:"reject",PENDING:"pend",SENT:"sent",INFO:"info",PARTIAL:"partial"};
+function statusPill(s){return `<span class="pill ${STATUS_CLASS[s]||"info"}">${STATUS_PLAIN[s]||s}</span>`;}
+
+/* ---------------- knowledge base (error dictionary) ---------------------- */
+const KB_SEED=[
+  {code:"CM999",family:"Message result",severity:"accept",desc:"You got this because: the whole message you sent was accepted by Banco de España.",action:"Nothing to do.",source:"CRG manual"},
+  {code:"CM998",family:"Message result",severity:"reject",desc:"You got this because: the message was accepted but it contains rejected records. The same reply file lists each declared record flagged accepted or rejected.",action:"Open this file, find the rejected records (they carry R/L codes), fix each cause, and resend only those.",source:"CRG manual"},
+  {code:"CM997",family:"Message result",severity:"reject",desc:"You got this because: the whole message was rejected (e.g. a structural / header problem).",action:"Fix the file-level problem and resend the entire message.",source:"CRG manual"},
+  {code:"C9999",family:"Record result (non-resident)",severity:"accept",desc:"You got this because: the non-resident record was accepted and BdE returned an assigned code.",action:"Store the returned code.",source:"GNR manual"},
+  {code:"C9998",family:"Record result (non-resident)",severity:"reject",desc:"You got this because: the non-resident record was rejected. The reason is in the explanatory text of the record.",action:"Read the explanatory text, correct, and resend.",source:"GNR manual"},
+  {code:"R*",family:"Record rejection (R)",severity:"reject",desc:"You got this because: any code starting with R is a severe error — Banco de España rejected the record and did NOT load it (wrong format, value outside the allowed list, mandatory field empty, inconsistent dates/amounts…).",action:"Fix the field named by the rule and resend just that record. Exact field rule: CRG §8.2 per record type.",source:"CRG §3.11 & §8.2"},
+  {code:"L*",family:"Pending correction (L)",severity:"pending",desc:"You got this because: an L code is a consistency problem. The record was loaded but is inconsistent, so it will be left out of the monthly return until you fix it.",action:"Correct the inconsistency before the period close. Exact rule: CRG §8.3.",source:"CRG §3.11 & §8.3"},
+  {code:"A*",family:"Warning / notice (A)",severity:"informative",desc:"You got this because: an A code is a warning (aviso). The data was accepted, but BdE flags a value it considers unusual.",action:"Review the flagged value; correct it in a future declaration only if it is actually wrong. No resend forced.",source:"CRG §9"},
+  {code:"RM*",family:"Message rejection (RM)",severity:"message",desc:"You got this because: an RM code rejects the WHOLE file at assimilation (bad header, wrong record length or order, duplicate/invalid reference). Nothing was processed.",action:"Fix the file-level problem (header, record lengths, ordering, unique reference) and resend the complete file.",source:"CRG §8.1"},
+  {code:"C*",family:"Record result (non-resident)",severity:"informative",desc:"You got this because: in non-resident replies, C codes are per-record results.",action:"If C9998, read the text and resend; if C9999, store the returned code.",source:"GNR §6.2"},
+  {code:"RM035",family:"Message rejection (RM)",severity:"message",desc:"You got this because: a message-level control (added with RDL 5/2021 changes) failed and the whole file was rejected.",action:"Correct the file and resend it whole. Exact trigger: CRG §8.1.",source:"CRG §8.1"},
+  {code:"R0024",family:"Record rejection (R)",severity:"reject",desc:"You got this because: validation R0024 rejected the record.",action:"Correct the flagged field and resend. Exact rule: CRG §8.2.",source:"CRG §8.2"},
+  {code:"R2345",family:"Record rejection (R)",severity:"reject",desc:"You got this because: a formal validation on an operation record failed (R2345 was last modified May 2025).",action:"Correct the flagged field and resend via CRGOPE/CRGCCE. Exact rule: CRG §8.2.",source:"CRG §8.2"},
+  {code:"R3023",family:"Record rejection (R)",severity:"reject",desc:"You got this because: validation R3023 (modified Mar 2023) rejected the record.",action:"Correct the flagged field and resend. Exact rule: CRG §8.2.",source:"CRG §8.2"},
+  {code:"L2251",family:"Pending correction (L)",severity:"pending",desc:"You got this because: consistency check L2251 (modified Mar 2023) left data inconsistent.",action:"Correct before the close. Exact rule: CRG §8.3.",source:"CRG §8.3"},
+  {code:"L2284",family:"Pending correction (L)",severity:"pending",desc:"You got this because: consistency check L2284 (added May 2025) left data inconsistent.",action:"Correct before the close. Exact rule: CRG §8.3.",source:"CRG §8.3"},
+  {code:"L1221",family:"Pending correction (L)",severity:"pending",desc:"You got this because: at close, dynamic guarantee data was auto-removed after the basic data was removed and you had not done it (added Sep 2024).",action:"Align the guarantee baja with the operation baja. Exact rule: CRG §8.3.",source:"CRG §8.3"},
+  {code:"A1090",family:"Warning / notice (A)",severity:"informative",desc:"You got this because: warning A1090 flags an attribute value BdE considers doubtful (it replaced A1007).",action:"Review/correct the attribute in the next declaration if needed. No resend forced.",source:"CRG §9"},
+  {code:"A1105",family:"Warning / notice (A)",severity:"informative",desc:"You got this because: warning A1105 (text updated Nov 2025) flags an attribute value to review.",action:"Review the attribute value. No resend forced.",source:"CRG §9"},
+  {code:"GTR88",family:"Person flow (GTR)",severity:"accept",desc:"You got this because: type 88 — the person record was accepted.",action:"Nothing to do.",source:"GTR manual"},
+  {code:"GTR87",family:"Person flow (GTR)",severity:"pending",desc:"You got this because: type 87 — BdE recommends justifying the declared institutional sector for this person.",action:"Send a sector justification (type 62) or correct the sector.",source:"GTR §4.5"},
+  {code:"GTR61",family:"Person flow (GTR)",severity:"pending",desc:"You got this because: type 61 — BdE reports a disparity in the person's data that must be confirmed or corrected.",action:"Send type 62 to confirm your data, or baja(23)+alta(21) to fix a wrong code.",source:"GTR §4.5"},
+  {code:"GTR85",family:"Person flow (GTR)",severity:"pending",desc:"You got this because: type 85 — a risk/operation was declared without a matching declared person.",action:"Declare the missing person (type 21) and the person–operation link.",source:"GTR §4.5"},
+  {code:"RECHAZADO",family:"Text result",severity:"reject",desc:"You got this because: the record text literally says RECHAZADO — Banco de España rejected this record.",action:"Read the record’s explanatory text for the exact reason, fix it, and resend.",source:"GTR / GNR replies"},
+  {code:"ACEPTADO",family:"Text result",severity:"accept",desc:"You got this because: the record text says ACEPTADO — the record was accepted.",action:"Nothing to do.",source:"GTR / GNR replies"},
+  {code:"DISPARIDAD",family:"Text result",severity:"pending",desc:"You got this because: Banco de España reports a disparity (its data differs from yours) that you must confirm or correct.",action:"Confirm your figure, or send a correction so the two sides agree.",source:"GTR §4.5"},
+
+  /* --- Real validations parsed from CRG manual V10.15 §3.11–3.14 (translated) --- */
+  {code:"RM012",family:"Message rejection (RM)",severity:"message",desc:"You got this because: the Process (period) is not one of the allowed quarterly prudential-data periods. It must be AAAA03, AAAA06, AAAA09 or AAAA12 with year ≥ 2018. The whole message is rejected.",action:"Set Process to a valid quarter-end period and resend the file.",source:"CRG §3.11"},
+  {code:"R0092",family:"Record rejection (R)",severity:"reject",desc:"You got this because: the Process date (reporting period) carried in the record is not valid or not currently open, so the record is rejected. Rectifications only fully process for the last 12 months (older ones are processed between Saturday and Monday).",action:"Use a valid/open Process period and resend the record.",source:"CRG §3.13.3"},
+  {code:"L2041",family:"Pending — blocks return (L)",severity:"pending",desc:"You got this because: basic data was declared for this operation, but module B2 (dynamic operation data) was not. The operation is left out of the anejo-3 return until fixed.",action:"Declare the missing B2 for this operation.",source:"CRG §3.12.1"},
+  {code:"L2229",family:"Pending — blocks return (L)",severity:"pending",desc:"You got this because: dynamic data was declared for this operation, but module B2 was not declared (also raised for live operations with no module declared and no baja BB020).",action:"Declare B2 for this operation, or send its baja (BB020) if it no longer exists.",source:"CRG §3.12.1"},
+  {code:"L2230",family:"Pending — blocks return (L)",severity:"pending",desc:"You got this because: B2 was declared for this operation, but module C1 (parts 1 and 2) was not declared.",action:"Declare C1 parts 1 and 2 for this operation.",source:"CRG §3.12.1"},
+  {code:"L2060",family:"Pending — blocks return (L)",severity:"pending",desc:"You got this because: per operation only one 'person code' with intervention nature T12, T14, T16, T17 or T71 is allowed, and more than one was found.",action:"Leave a single main holder with that intervention nature.",source:"CRG §3.12.1"},
+  {code:"L2095",family:"Pending — blocks return (L)",severity:"pending",desc:"You got this because: the declared amounts are incompatible with the declared 'first non-payment date' and 'operation status' (among others).",action:"Reconcile the amounts with the default date and the operation status.",source:"CRG §3.12.1"},
+  {code:"L2331",family:"Pending — person not in GTR (L)",severity:"pending",desc:"You got this because: the 'person code' on this operation has not been declared to the GTR (risk-holders) system, so the operation/person pair is left out of the return.",action:"Declare the person in GTR (type 21) first, then the operation/person relation.",source:"CRG §3.12.2"},
+  {code:"L2332",family:"Pending — person not in GTR (L)",severity:"pending",desc:"You got this because: the 'person code' on this operation has not been declared to the GTR (risk-holders) system.",action:"Declare the person in GTR (type 21), then the operation/person relation.",source:"CRG §3.12.2"},
+  {code:"L2333",family:"Pending — person not in GTR (L)",severity:"pending",desc:"You got this because: the 'person code' on this operation has not been declared to the GTR (risk-holders) system.",action:"Declare the person in GTR (type 21), then the operation/person relation.",source:"CRG §3.12.2"},
+  {code:"L2334",family:"Pending — person not in GTR (L)",severity:"pending",desc:"You got this because: the 'person code' on this operation has not been declared to the GTR (risk-holders) system.",action:"Declare the person in GTR (type 21), then the operation/person relation.",source:"CRG §3.12.2"},
+  {code:"L2039",family:"Pending — blocks return (L)",severity:"pending",desc:"You got this because: for the indirect-risk holder, the declared 'intervention nature in the operation' must match the 'person code', and it does not.",action:"Align the intervention nature with the person code.",source:"CRG §3.12.2"},
+  {code:"L2228",family:"Pending — blocks return (L)",severity:"pending",desc:"You got this because: every risk holder declared in module C2 must also be declared in module B1 as an indirect risk holder.",action:"Declare the missing holders in B1.",source:"CRG §3.12.2"},
+  {code:"R2106",family:"Record rejection (R)",severity:"reject",desc:"You got this because: more than one link (G) of type T74 (contract code assigned to operations) was sent for the operation; the later one is rejected.",action:"Keep a single T74 link; delete the existing one before sending a new one.",source:"CRG §3.14.2"},
+  {code:"R2107",family:"Record rejection (R)",severity:"reject",desc:"You got this because: a baja (removal) of the T74 contract link was sent with a Process date that is not the open period.",action:"Send the T74 baja only in the open period.",source:"CRG §3.14.2"},
+  {code:"R2108",family:"Record rejection (R)",severity:"reject",desc:"You got this because: a T74 link whose contract code equals the operation code is not allowed (unless a G1 of type T58 exists for that operation).",action:"Use B2 'contract-operation relation = True' instead, or declare the required T58.",source:"CRG §3.14.2"},
+  {code:"R2179",family:"Record rejection (R)",severity:"reject",desc:"You got this because: for entities affected by a merger, basic-data declarations for the calendar month are not admitted for the absorbed entity.",action:"Do not send basic data for that month for the absorbed entity.",source:"CRG §3.14.3"},
+  {code:"R2194",family:"Record rejection (R)",severity:"reject",desc:"You got this because: a reusable operation that already had a contract code must re-declare the same B2 'contract-operation relation' value; it did not.",action:"Re-declare the same relation value (and the same contract G if applicable).",source:"CRG §3.14.2"},
+  {code:"L2090",family:"Pending correction (L)",severity:"pending",desc:"You got this because: B2 'contract-operation relation' = True is incompatible with the existence of a T74 link for the operation.",action:"Set the relation to False, or remove the T74 link.",source:"CRG §3.14.2"},
+  {code:"L2091",family:"Pending correction (L)",severity:"pending",desc:"You got this because: B2 'contract-operation relation' = False is incompatible with the absence of a T74 link.",action:"Send the T74 link (with the contract code) for this operation.",source:"CRG §3.14.2"},
+  {code:"L2092",family:"Pending correction (L)",severity:"pending",desc:"You got this because: there is no B2 for the operation code referenced by a T74 link.",action:"Declare B2 for that operation.",source:"CRG §3.14.2"},
+  {code:"L1116",family:"Pending — linking (L)",severity:"pending",desc:"You got this because: the new operation code ('code being linked') is already declared in the CIR, so the link cannot be made.",action:"Use a code that is not already declared, or correct the link.",source:"CRG §3.14.3"},
+  {code:"L1124",family:"Pending — linking (L)",severity:"pending",desc:"You got this because: the operation in 'linked code' is not declared in the CIR, so the link cannot be made.",action:"Declare the linked operation first.",source:"CRG §3.14.3"},
+  {code:"L1121",family:"Pending — linking (L)",severity:"pending",desc:"You got this because: the operation appears as 'linked code' in more than one T55/T59/T60 link.",action:"Keep a single link for that operation.",source:"CRG §3.14.3"},
+  {code:"L1125",family:"Pending — linking (L)",severity:"pending",desc:"You got this because: the operation appears as 'code being linked' in more than one T55/T59/T60 link.",action:"Keep a single link for that operation.",source:"CRG §3.14.3"},
+  {code:"L1122",family:"Pending — linking (L)",severity:"pending",desc:"You got this because: no T59 (merger) link exists in which this operation is the 'linked code'.",action:"Declare the missing T59 link.",source:"CRG §3.14.3"},
+  {code:"L1111",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: at close, the operation was removed (baja) because it was included in a management code-change link (T55).",action:"No action — informational.",source:"CRG §3.14.3"},
+  {code:"L1112",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: at close, the operation was removed (baja) because of a merger/transfer link (T59).",action:"No action — informational.",source:"CRG §3.14.3"},
+  {code:"L1115",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: a T55/T59/T60 link was removed because the 'linked code' operation does not exist.",action:"Check the link if this was unexpected.",source:"CRG §3.14.3"},
+  {code:"L1118",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: a duplicate T55/T59/T60 link was removed (only one was kept).",action:"No action — informational.",source:"CRG §3.14.3"},
+  {code:"L1123",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: a T55/T59/T60 link was removed because the 'code being linked' already exists.",action:"Check the link if this was unexpected.",source:"CRG §3.14.3"},
+  {code:"L1127",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: a T55/T59/T60 link was applied at close.",action:"No action — informational.",source:"CRG §3.14.3"},
+  {code:"L1207",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: a T74 contract link was created at close because B2 'contract-operation relation' = True.",action:"No action — informational.",source:"CRG §3.14.2"},
+  {code:"L1208",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: a T74 contract link was eliminated at close.",action:"No action — informational.",source:"CRG §3.14.2"},
+  {code:"L1209",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: the operation was marked 'not sendable to AnaCredit' because B2 'relation' = False and no T74 link was declared.",action:"Declare the T74 contract link if AnaCredit reporting is required.",source:"CRG §3.14.2"},
+  {code:"L1210",family:"Notice — action taken (L)",severity:"informative",desc:"You got this because: the operation code is not declared, so its T74 link was eliminated at close.",action:"No action — informational.",source:"CRG §3.14.2"},
+];
+let kbIndex=new Map();
+function rebuildKbIndex(){ kbIndex=new Map(); for(const k of state.kb){ if(!kbIndex.has(k.code)) kbIndex.set(k.code,k); } }
+function kbFind(code){
+  if(kbIndex.has(code)) return kbIndex.get(code);
+  const fam=c=>kbIndex.get(c);
+  if(/^R\d{4}$/.test(code)&&fam("R*")) return Object.assign({code,inherited:true},fam("R*"));
+  if(/^L\d{4}$/.test(code)&&fam("L*")) return Object.assign({code,inherited:true},fam("L*"));
+  if(/^A\d{4}$/.test(code)&&fam("A*")) return Object.assign({code,inherited:true},fam("A*"));
+  if(/^RM\d{3}$/.test(code)&&fam("RM*")) return Object.assign({code,inherited:true},fam("RM*"));
+  if(/^C\d{4}$/.test(code)&&fam("C*")) return Object.assign({code,inherited:true},fam("C*"));
+  return null;
+}
+function kbHasSpecific(code){ return state.kb.some(k=>k.code===code); }
+function codePills(codes){
+  return codes.map(c=>{ const k=kbFind(c); const sev=k?k.severity:""; const cls=sev==="reject"||sev==="message"?"r":sev==="pending"?"l":sev==="accept"?"ok":sev==="informative"?"a":"";
+    return `<span class="codepill ${cls}" data-code="${esc(c)}" title="${esc(k?k.desc.slice(0,90):'unknown code — click to add meaning')}">${esc(c)}</span>`; }).join("");
+}
+
+/* ---------------- state + persistence ------------------------------------ */
+const LS="cirbeCompassState";
+let state={files:{},records:[],runs:[],kb:[],entity:"",settings:{skipInfo:true,fast:true}};
+let dataVer=0;
+function loadState(){
+  try{ const raw=localStorage.getItem(LS); if(raw){ const p=JSON.parse(raw);
+    state.files=p.files||{}; state.records=p.records||[]; state.runs=p.runs||[]; state.kb=p.kb&&p.kb.length?p.kb:JSON.parse(JSON.stringify(KB_SEED)); state.entity=p.entity||""; state.settings=Object.assign({skipInfo:true,fast:true},p.settings||{});
+  } else { state.kb=JSON.parse(JSON.stringify(KB_SEED)); } }
+  catch(e){ state.kb=JSON.parse(JSON.stringify(KB_SEED)); }
+  rebuildKbIndex();
+}
+function saveState(){
+  try{ localStorage.setItem(LS,JSON.stringify(state)); }
+  catch(e){ if(String(e).match(/quota|exceeded/i)) toast("Storage is full — export a backup and use ‘Skip informational records’."); }
+}
+
+/* ---------------- folder access ------------------------------------------ */
+let dirOut=null,dirIn=null,pendingOut=null,pendingIn=null;
+const idb={
+  open(){return new Promise((res,rej)=>{ if(typeof indexedDB==="undefined")return rej(); const r=indexedDB.open("cirbeCompassHandles",1); r.onupgradeneeded=()=>r.result.createObjectStore("h"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});},
+  async set(k,v){try{const db=await this.open();return new Promise((res)=>{const tx=db.transaction("h","readwrite");tx.objectStore("h").put(v,k);tx.oncomplete=res;});}catch(e){}},
+  async get(k){try{const db=await this.open();return new Promise((res)=>{const tx=db.transaction("h");const rq=tx.objectStore("h").get(k);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>res(null);});}catch(e){return null;}}
+};
+function setFolder(which,h){
+  if(which==="out"){dirOut=h;$("#nameOut").textContent=h.name;$("#dotOut").classList.add("on");$("#folderOut").classList.add("connected");}
+  else{dirIn=h;$("#nameIn").textContent=h.name;$("#dotIn").classList.add("on");$("#folderIn").classList.add("connected");}
+  idb.set(which,h); updateStep(); toast("Folder connected: "+h.name);
+}
+async function pickFolder(which){
+  if(!window.showDirectoryPicker){ toast("This browser can’t open folders. Drag them here from Explorer, or use ‘Add files’."); return; }
+  const pending=which==="out"?pendingOut:pendingIn;
+  if(pending&&(which==="out"?!dirOut:!dirIn)){ try{ if(await pending.requestPermission({mode:"read"})==="granted"){ setFolder(which,pending); return; } }catch(e){} }
+  try{ const opts={mode:"read"}; if(pending) opts.startIn=pending; const h=await window.showDirectoryPicker(opts); setFolder(which,h); }catch(e){}
+}
+async function restoreFolders(){
+  try{ for(const which of ["out","in"]){ const h=await idb.get(which); if(!h) continue; if(which==="out")pendingOut=h;else pendingIn=h;
+    let st="prompt"; try{ st=await h.queryPermission({mode:"read"}); }catch(e){}
+    if(st==="granted") setFolder(which,h);
+    else { const el=$(which==="out"?"#nameOut":"#nameIn"); if(el) el.textContent=h.name+" — click Connect (1 click)"; }
+  } }catch(e){}
+}
+async function* walk(dir,path){
+  let it; try{ it=dir.values(); }catch(e){ return; }
+  while(true){ let r; try{ r=await it.next(); }catch(e){ return; } if(r.done) return;
+    const e=r.value,p=path+"/"+e.name; if(e.kind==="file") yield {entry:e,path:p}; else if(e.kind==="directory") yield* walk(e,p); }
+}
+function isCandidate(name){ return PROC_RE.test(name) || /\.(txt|dat|0|[0-9])$/i.test(name); }
+
+/* ---------------- parsing ------------------------------------------------ */
+function parseFileContent(text,fmeta){
+  const recs=[]; const counts={ACCEPTED:0,REJECTED:0,PENDING:0,SENT:0,INFO:0};
+  const lines=text.split(/\r?\n/);
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i]; if(!line.trim()) continue;
+    const type=detectType(line);
+    const codes=extractCodes(line,type);
+    const keys=extractKeys(line);
+    const status=recordStatus(fmeta.dir,type==="?"?null:type,codes);
+    counts[status]=(counts[status]||0)+1;
+    if(state.settings.skipInfo && status==="INFO" && !HEADER_TYPES.has(type)) continue;
+    recs.push({id:fmeta.key+"#"+i,file:fmeta.name,fileKey:fmeta.key,lineNo:i+1,proc:fmeta.proc,dir:fmeta.dir,
+      fileDate:fmeta.date,mtime:fmeta.mtime,type:type||"?",typeLabel:RECTYPES[type]||"",status,codes,keys,
+      name:guessName(line,type),raw:(status==="REJECTED"||status==="PENDING")?line.slice(0,400):line.slice(0,140)});
+  }
+  return {recs,counts};
+}
+
+/* ---------------- update run --------------------------------------------- */
+let scanning=false,scanAbort=false;
+async function runUpdate(){
+  if(!dirOut&&!dirIn){ toast("Connect at least one folder first, or use ‘Add files’."); return; }
+  scanning=true; scanAbort=false; $("#btnStop").style.display="inline-block"; $("#btnStop2").style.display="inline-block"; $("#btnUpdate").disabled=true; $("#btnUpdate2").disabled=true;
+  let newFiles=0,newRecords=0,skipped=0,seen=0,errs=0,filesPresent=0,candidates=0,classified=0; const t0=Date.now();
+  const fast=state.settings.fast!==false;
+  const known=new Set(Object.values(state.files).map(f=>f.path));
+  const openBefore=new Set(buildGroups().filter(g=>g.resolution==="OPEN_REJECTED"||g.resolution==="OPEN_PENDING").map(g=>g.key));
+  try{
+    for(const h of [dirOut,dirIn]){ if(!h) continue;
+      for await (const {entry,path} of walk(h,h.name)){
+        if(scanAbort) break; seen++; filesPresent++;
+        if(seen%40===0){ toast(`Reading ${h.name}… ${seen} seen · ${newFiles} new · ${skipped} known · ${Math.round((Date.now()-t0)/1000)}s`); await new Promise(r=>setTimeout(r,0)); }
+        if(!isCandidate(entry.name)) continue;
+        candidates++;
+        if(fast&&known.has(path)){ skipped++; continue; }
+        let f; try{ f=await entry.getFile(); }catch(e){ errs++; continue; }
+        const key=path+"|"+f.size+"|"+f.lastModified;
+        if(state.files[key]){ skipped++; continue; }
+        const cls=classifyName(entry.name); if(!cls.proc) continue;
+        classified++;
+        let text; try{ text=await f.text(); }catch(e){ errs++; continue; }
+        const fmeta={key,name:entry.name,path,size:f.size,mtime:f.lastModified,proc:cls.proc,dir:cls.dir,date:cls.date,readAt:nowIso()};
+        const parsed=parseFileContent(text,fmeta); fmeta.counts=parsed.counts;
+        state.files[key]=fmeta; known.add(path); state.records.push(...parsed.recs);
+        newFiles++; newRecords+=parsed.recs.length;
+      }
+      if(scanAbort) break;
+    }
+    state.runs.unshift({at:nowIso(),newFiles,newRecords,skipped,aborted:scanAbort||undefined});
+    if(state.runs.length>100) state.runs.length=100;
+    dataVer++; saveState(); renderAll();
+    const openAfter=buildGroups().filter(g=>g.resolution==="OPEN_REJECTED"||g.resolution==="OPEN_PENDING").map(g=>g.key);
+    const newlyOpen=openAfter.filter(k=>!openBefore.has(k)).length;
+    let msg=`${scanAbort?"Stopped":"Done"} in ${Math.round((Date.now()-t0)/1000)}s — ${newFiles} new file(s), ${skipped} already read${errs?`, ${errs} unreadable`:""}.`;
+    if(newFiles&&newlyOpen) msg+=`  ⚠ ${newlyOpen} new item(s) now need action — see the “needs action” tab.`;
+    else if(newFiles&&!newlyOpen) msg+=`  No new problems found. 🎉`;
+    // empty-folder guidance
+    if(filesPresent===0) msg=`These folders look empty. Double-check you connected the right two folders (the one you send from, and the one replies arrive in).`;
+    else if(candidates===0) msg=`Found ${filesPresent} file(s) but none look like CIRBE / EDITRAN files. Are these the right folders? CIRBE files start with CRG…, GTR… or GNR… (or end in .txt).`;
+    else if(newFiles===0&&classified===0&&skipped===0) msg=`Found ${candidates} file(s) but none match CIRBE / EDITRAN naming (they should start with CRG…, GTR… or GNR…). Are these the right folders?`;
+    else if(newFiles===0&&skipped>0) msg+=`  All known files already read — nothing new.`;
+    toast(msg);
+  }catch(e){ showFatal(e&&e.message||e); }
+  scanning=false; $("#btnStop").style.display="none"; $("#btnStop2").style.display="none"; $("#btnUpdate").disabled=false; $("#btnUpdate2").disabled=false; updateStep();
+}
+
+/* ---------------- lifecycle (carried over) ------------------------------- */
+let reconCache={ver:-1,groups:null};
+function buildGroups(){
+  if(reconCache.ver===dataVer&&reconCache.groups) return reconCache.groups;
+  const g={};
+  for(const r of state.records){ for(const k of r.keys){
+    const x=g[k]=g[k]||{key:k,name:"",sent:0,acc:0,rej:0,pend:0,events:[],codes:new Set(),procs:new Set()};
+    if(r.name&&r.name.length>(x.name||"").length) x.name=r.name;
+    if(r.dir==="OUT") x.sent++;
+    if(r.status==="ACCEPTED")x.acc++; if(r.status==="REJECTED")x.rej++; if(r.status==="PENDING")x.pend++;
+    r.codes.forEach(c=>x.codes.add(c)); if(r.proc)x.procs.add(r.proc);
+    x.events.push({mtime:r.mtime||0,fileDate:r.fileDate||"",lineNo:r.lineNo||0,dir:r.dir,status:r.status,file:r.file,proc:r.proc,type:r.type,codes:r.codes});
+  }}
+  for(const x of Object.values(g)){
+    x.events.sort((a,b)=>(a.mtime-b.mtime)||a.fileDate.localeCompare(b.fileDate)||(a.lineNo-b.lineNo));
+    let res="AWAITING",resAt="",resFile="",resMtime=0;
+    for(const e of x.events){ if(e.dir==="IN"&&(e.status==="ACCEPTED"||e.status==="REJECTED"||e.status==="PENDING")){
+      res=e.status==="ACCEPTED"?"RESOLVED":e.status==="REJECTED"?"OPEN_REJECTED":"OPEN_PENDING";
+      resAt=e.fileDate||(e.mtime?new Date(e.mtime).toISOString().slice(0,10).replace(/-/g,""):""); resFile=e.file; resMtime=e.mtime||0; } }
+    if(res==="AWAITING"&&x.sent===0&&x.acc===0&&x.rej===0&&x.pend===0) res="INFO";
+    x.resolution=res; x.resAt=resAt; x.resFile=resFile; x.resMtime=resMtime;
+    x.replies=x.events.filter(e=>e.dir==="IN"&&e.status!=="INFO").length;
+    x.ageDays = (res==="OPEN_REJECTED"||res==="OPEN_PENDING")&&resMtime ? Math.max(0,Math.floor((Date.now()-resMtime)/86400000)) : null;
+  }
+  reconCache={ver:dataVer,groups:Object.values(g)};
+  return reconCache.groups;
+}
+const RES={RESOLVED:["resolved","✓ Resolved"],OPEN_REJECTED:["openrej","Rejected — fix &amp; resend"],OPEN_PENDING:["openpend","Pending correction"],AWAITING:["await","Sent — awaiting reply"],INFO:["info","Info"]};
+function resPill(r){const x=RES[r]||["info",r];return `<span class="pill ${x[0]}">${x[1]}</span>`;}
+
+/* ---------------- rendering ---------------------------------------------- */
+function hasData(){ return state.records.length>0 || Object.keys(state.files).length>0; }
+function updateStep(){
+  const connected=dirOut||dirIn||pendingOut||pendingIn;
+  const data=hasData();
+  let step = data ? 3 : (connected ? 2 : 1);   /* data means you've already done 1 & 2 — show Review */
+  $$("#steps .step").forEach(el=>{ const s=+el.dataset.step; el.classList.toggle("active",s===step); el.classList.toggle("done",s<step); });
+  // welcome vs data
+  $("#dataArea").style.display = data?"block":"none";
+  $("#connectPanel").style.display = data?"none":"block";
+  // sync refresh-bar folder chips
+  const oN=$("#nameOut2"),iN=$("#nameIn2");
+  if(oN){ oN.textContent=dirOut?dirOut.name:(pendingOut?pendingOut.name+" (reconnect)":"send folder — not connected"); $("#dotOut2").classList.toggle("on",!!dirOut); }
+  if(iN){ iN.textContent=dirIn?dirIn.name:(pendingIn?pendingIn.name+" (reconnect)":"receive folder — not connected"); $("#dotIn2").classList.toggle("on",!!dirIn); }
+  // welcome text adapts
+  if(!data){
+    if(connected){ $("#welcomeTitle").textContent="Folders connected ✓"; $("#welcomeText").innerHTML="Good — now click <b>⟳ Update</b> below to read your files. The first read goes through every file; after that it only reads new ones."; $("#whatGrid").style.display="none"; }
+    else { $("#welcomeTitle").textContent="Welcome 👋"; $("#whatGrid").style.display="grid"; }
+  }
+}
+function renderAll(){ try{
+  rebuildKbIndex(); updateStep();
+  if(hasData()){ renderSummary(); renderTodo(); renderRecords(); renderFiles(); }
+  renderKb();
+}catch(e){ showFatal(e&&e.message||e); } }
+
+function renderSummary(){
+  const groups=buildGroups();
+  const open=groups.filter(g=>g.resolution==="OPEN_REJECTED"||g.resolution==="OPEN_PENDING").length;
+  const resolved=groups.filter(g=>g.resolution==="RESOLVED").length;
+  const awaiting=groups.filter(g=>g.resolution==="AWAITING").length;
+  const files=Object.keys(state.files).length;
+  const last=state.runs[0]?state.runs[0].at:"";
+  $("#summary").innerHTML=`
+    <div class="scard todo" data-go="todo"><div class="n">${open}</div><div class="l">need your action</div></div>
+    <div class="scard ok" data-go="resolved"><div class="n">${resolved}</div><div class="l">resolved (accepted)</div></div>
+    <div class="scard wait" data-go="awaiting" title="Records you sent for which no rejection or pending notice is on record. If Banco de España does not echo accepted records back to you, this simply means ‘sent, nothing flagged’ — no action needed."><div class="n">${awaiting}</div><div class="l">sent · awaiting reply</div></div>
+    <div class="scard files" data-go="files"><div class="n">${files}</div><div class="l">files read · last ${esc(last.slice(5,16))}</div></div>`;
+}
+
+let todoSortFn=null;
+let lastTodoList=[];
+function ageLabel(d){ if(d==null) return ""; if(d===0) return "today"; if(d===1) return "1 day"; return d+" days"; }
+function renderTodo(){
+  const groups=buildGroups();
+  const q=($("#todoSearch").value||"").toUpperCase(); const kind=$("#todoKind").value;
+  let list=groups.filter(g=>{
+    if(kind) return g.resolution===kind;
+    return g.resolution==="OPEN_REJECTED"||g.resolution==="OPEN_PENDING";
+  });
+  if(q) list=list.filter(g=>g.key.toUpperCase().includes(q)||g.name.toUpperCase().includes(q)||[...g.codes].some(c=>c.includes(q))||[...(g.procs||[])].some(p=>p.includes(q)));
+  // oldest-open first (most urgent), rejected before pending
+  list.sort((a,b)=>(a.resolution==="OPEN_REJECTED"?0:1)-(b.resolution==="OPEN_REJECTED"?0:1)||((b.ageDays||0)-(a.ageDays||0))||(b.resAt||"").localeCompare(a.resAt||""));
+  lastTodoList=list;
+  $("#todoSub").innerHTML = list.length
+    ? `<b>${list.length}</b> item(s) need action, oldest first. Click any row to see its full send → reply → resend history. (An item rejected earlier but accepted later is <b>not</b> shown — it counts as resolved.)`
+    : `Nothing needs action right now. Everything you sent has been accepted, or has no outstanding rejection. 🎉`;
+  $("#tblTodo").innerHTML = list.length ? `<tr><th>Key</th><th>Name</th><th>What to do</th><th>Open for</th><th>Sent</th><th>Codes seen</th></tr>`+
+    list.slice(0,600).map(g=>`<tr class="click" data-key="${esc(g.key)}"><td class="mono"><b>${esc(g.key)}</b></td><td>${esc(g.name||"")}</td>
+      <td>${resPill(g.resolution)}</td><td class="muted">${esc(ageLabel(g.ageDays))}</td><td>${g.sent}×</td><td>${codePills([...g.codes].slice(0,8))}</td></tr>`).join("")
+    : `<tr><td><div class="empty">No items need action. 🎉</div></td></tr>`;
+}
+function exportWorklist(){
+  const rows=[["key","name","status","open_for_days","sent_times","rejected_times","pending_times","last_reply_date","last_reply_file","codes"]];
+  for(const g of lastTodoList){ rows.push([g.key,g.name||"",g.resolution==="OPEN_REJECTED"?"Rejected":"Pending",g.ageDays==null?"":g.ageDays,g.sent,g.rej,g.pend,fmtDate(g.resAt),g.resFile||"",[...g.codes].join(" ")]); }
+  const csv=rows.map(r=>r.map(v=>{const s=String(v==null?"":v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",")).join("\n");
+  download("cirbe_worklist_"+new Date().toISOString().slice(0,10)+".csv",csv,"text/csv");
+}
+
+let recPage=250;
+function passStatus(r,st){ return !st || r.status===st; }
+function renderRecords(){
+  const q=($("#recSearch").value||"").toLowerCase().split(/\s+/).filter(Boolean); const st=$("#recStatus").value;
+  let rs=state.records.filter(r=>{
+    if(!passStatus(r,st)) return false;
+    if(!q.length) return true;
+    const hay=(r.keys.join(" ")+" "+r.name+" "+r.codes.join(" ")+" "+r.file+" "+r.proc+" "+r.type).toLowerCase();
+    return q.every(t=>hay.includes(t));
+  });
+  rs.sort((a,b)=>(b.mtime||0)-(a.mtime||0)||(b.fileDate||"").localeCompare(a.fileDate||""));
+  const total=rs.length; rs=rs.slice(0,recPage);
+  $("#tblRecords").innerHTML=`<tr><th>Arrived</th><th>Process</th><th>Type</th><th>Key</th><th>Status</th><th>Codes</th><th>File</th></tr>`+
+    (rs.length? rs.map(r=>`<tr class="click" data-key2="${esc(r.keys[0]||"")}"><td class="mono muted">${r.mtime?new Date(r.mtime).toISOString().slice(0,10):""}</td>
+      <td class="mono" title="${esc((PROCESSES[r.proc]||{}).label||"")}">${esc(r.proc)}</td>
+      <td class="mono" title="${esc(r.typeLabel)}">${esc(r.type)}</td>
+      <td>${r.keys[0]?`<span class="keylink" data-key="${esc(r.keys[0])}">${esc(r.keys[0])}</span>`:""}</td>
+      <td>${statusPill(r.status)}</td><td>${codePills(r.codes)}</td>
+      <td class="mono muted" title="${esc(r.file)}">${esc(r.file.length>22?r.file.slice(0,22)+"…":r.file)}</td></tr>`).join("")
+     : `<tr><td><div class="empty">No records match.</div></td></tr>`);
+  const more=$("#recMore"); if(more){ if(total>recPage){ more.style.display="block"; more.textContent=`Showing ${recPage} of ${total} — show more`; } else more.style.display="none"; }
+}
+
+let openFileKey=null;
+function fileVerdict(f){ const c=f.counts||{}; const good=c.ACCEPTED||0; const bad=(c.REJECTED||0)+(c.PENDING||0); if(good&&bad) return "PARTIAL"; if(c.REJECTED) return "REJECTED"; if(c.PENDING) return "PENDING"; if(c.ACCEPTED) return "ACCEPTED"; if(c.SENT) return "SENT"; return "INFO"; }
+function fileRow(f){
+  const c=f.counts||{};const open=openFileKey===f.key;
+  return `<tr class="click" data-fkey="${esc(f.key)}"><td class="mono muted">${f.mtime?new Date(f.mtime).toISOString().slice(0,10):""}</td>
+       <td>${f.dir==="OUT"?'<span class="pill sent">Sent ↑</span>':'<span class="pill info">Received ↓</span>'}</td>
+       <td class="mono" title="${esc((PROCESSES[f.proc]||{}).label||"")}">${esc(f.proc)}</td>
+       <td class="mono" title="${esc(f.path)}">${esc(f.name)}</td>
+       <td>${statusPill(fileVerdict(f))}</td>
+       <td style="color:var(--green)">${c.ACCEPTED||0}</td><td style="color:var(--red)">${c.REJECTED||0}</td><td style="color:var(--amber)">${c.PENDING||0}</td></tr>`+
+       (open?`<tr><td colspan="8">${fileDetail(f)}</td></tr>`:"");
+}
+function dayRollup(files){
+  let sent=0,recv=0,acc=0,part=0,rej=0,pend=0;
+  for(const f of files){ if(f.dir==="OUT")sent++; else recv++; const v=fileVerdict(f); if(v==="ACCEPTED")acc++; else if(v==="PARTIAL")part++; else if(v==="REJECTED")rej++; else if(v==="PENDING")pend++; }
+  const bits=[]; if(rej)bits.push(`<span class="pill reject">${rej} rejected</span>`); if(part)bits.push(`<span class="pill partial">${part} partial</span>`); if(pend)bits.push(`<span class="pill pend">${pend} pending</span>`); if(acc)bits.push(`<span class="pill ok">${acc} accepted</span>`);
+  return `<b>${sent} sent ↑ · ${recv} received ↓</b> &nbsp; ${bits.join(" ")||'<span class="muted">no results yet</span>'}`;
+}
+function renderFiles(){
+  const q=($("#fileSearch").value||"").toLowerCase(); const dir=$("#fileDir").value;
+  const range=$("#fileRange")?$("#fileRange").value:""; const group=$("#fileGroup")&&$("#fileGroup").checked;
+  let cutoff=0;
+  if(range==="1"){ const t=new Date(); t.setHours(0,0,0,0); cutoff=t.getTime(); }
+  else if(range){ cutoff=Date.now()-(+range)*86400000; }
+  let fs=Object.values(state.files).filter(f=>(!q||f.name.toLowerCase().includes(q)||(f.proc||"").toLowerCase().includes(q))&&(!dir||f.dir===dir)&&(!cutoff||(f.mtime||0)>=cutoff));
+  fs.sort((a,b)=>(b.mtime||0)-(a.mtime||0));
+  const head=`<tr><th>Arrived</th><th>Direction</th><th>Process</th><th>File</th><th>Result</th><th>Acc</th><th>Rej</th><th>Pend</th></tr>`;
+  if(!fs.length){ $("#tblFiles").innerHTML=head+`<tr><td colspan="8"><div class="empty">No files match.</div></td></tr>`; return; }
+  if(group){
+    const byDay={}; for(const f of fs){ const d=f.mtime?new Date(f.mtime).toISOString().slice(0,10):"(no date)"; (byDay[d]=byDay[d]||[]).push(f); }
+    const days=Object.keys(byDay).sort((a,b)=>b.localeCompare(a));
+    $("#tblFiles").innerHTML=head+days.map(d=>`<tr><td colspan="8" style="background:var(--brandsoft);border-top:2px solid var(--brand)"><b>${esc(d)}</b> &nbsp; ${dayRollup(byDay[d])}</td></tr>`+byDay[d].map(fileRow).join("")).join("");
+  } else {
+    $("#tblFiles").innerHTML=head+fs.map(fileRow).join("");
+  }
+}
+function fileDetail(f){
+  const recs=state.records.filter(r=>r.fileKey===f.key);
+  const c=f.counts||{};
+  const head=`<div style="padding:4px 0"><b>${esc(f.name)}</b> · ${esc((PROCESSES[f.proc]||{}).label||f.proc)} · read ${esc(f.readAt||"")}<br><span class="muted mono" style="font-size:11.5px">${esc(f.path)}</span><br>Result: ${statusPill(fileVerdict(f))} — ${Object.entries(c).filter(([k,v])=>v).map(([k,v])=>STATUS_PLAIN[k]+": "+v).join(" · ")||"no records"}</div>`;
+  if(!recs.length) return head+`<p class="hint">Individual records here were purely informational and not stored (the counts above are exact). Turn off ‘Skip informational records’ in Settings to keep them.</p>`;
+  const probs=recs.filter(r=>r.status==="REJECTED"||r.status==="PENDING");
+  const list=(probs.length?probs:recs).slice(0,60);
+  return head+`<div class="tablewrap" style="max-height:240px;margin-top:6px"><table><tr><th>Line</th><th>Type</th><th>Key</th><th>Status</th><th>Codes</th></tr>`+
+    list.map(r=>`<tr><td class="mono muted">${r.lineNo}</td><td class="mono">${esc(r.type)}</td><td>${r.keys[0]?`<span class="keylink" data-key="${esc(r.keys[0])}">${esc(r.keys[0])}</span>`:""}</td><td>${statusPill(r.status)}</td><td>${codePills(r.codes)}</td></tr>`).join("")+`</table></div>`;
+}
+
+function renderKb(){
+  const q=($("#kbSearch")?$("#kbSearch").value:"").toLowerCase();
+  let list=state.kb.filter(k=>!q||k.code.toLowerCase().includes(q)||(k.desc||"").toLowerCase().includes(q)||(k.family||"").toLowerCase().includes(q));
+  const tag={accept:["ok","accepted"],reject:["reject","rejected"],pending:["pend","pending"],informative:["info","info"],message:["msg","whole file"],team:["info","note"]};
+  $("#kbList").innerHTML = list.length ? list.slice(0,300).map(k=>{const t=tag[k.severity]||["info",k.severity];
+    return `<div class="kbcard"><div><span class="code">${esc(k.code)}</span><span class="tag ${t[0]}">${t[1]}</span> <span class="muted" style="font-size:12px">${esc(k.family||"")}</span></div>
+      <div style="margin-top:4px">${esc(k.desc||"")}</div>${k.action?`<div style="margin-top:3px"><b>Fix:</b> ${esc(k.action)}</div>`:""}${k.source?`<div class="hint">${esc(k.source)}</div>`:""}</div>`;}).join("")
+    : `<div class="empty">No matching code. Use “+ Add a code meaning” to teach it.</div>`;
+}
+
+/* ---------------- dossier ------------------------------------------------ */
+function openDossier(key){
+  const g=buildGroups().find(x=>x.key===key); const body=$("#dossierBody");
+  if(!g){ body.innerHTML=`<div class="empty">No tracked history for ${esc(key)}.</div>`; $("#dossier").style.display="flex"; return; }
+  let banner="";
+  if(g.resolution==="RESOLVED"&&g.rej>0) banner=`<div class="banner resolved"><b>✓ Resolved.</b> This was rejected ${g.rej}× then resent and finally <b>accepted</b> on ${fmtDate(g.resAt)} (${esc(g.resFile)}). Nothing more to do.</div>`;
+  else if(g.resolution==="RESOLVED") banner=`<div class="banner resolved"><b>✓ Accepted</b> on ${fmtDate(g.resAt)} (${esc(g.resFile)}). Nothing to do.</div>`;
+  else if(g.resolution==="OPEN_REJECTED") banner=`<div class="banner openrej"><b>Action needed.</b> The latest reply is a <b>rejection</b>. Fix the cause (codes below), then resend — the timeline updates when the new reply arrives.</div>`;
+  else if(g.resolution==="OPEN_PENDING") banner=`<div class="banner openpend"><b>Action needed.</b> Latest state is <b>pending correction</b> — correct before the month close.</div>`;
+  else if(g.resolution==="AWAITING") banner=`<div class="banner await"><b>Sent — awaiting reply.</b> Sent ${g.sent}×; no rejection or pending notice is on record. If Banco de España does not echo accepted records in your replies, “awaiting” just means “sent, nothing flagged” — nothing to do.</div>`;
+  const evs=g.events.map(e=>{ const when=e.mtime?new Date(e.mtime).toISOString().slice(0,16).replace("T"," "):"";
+    const dirpill=e.dir==="OUT"?'<span class="pill sent">You sent ↑</span>':'<span class="pill info">BdE replied ↓</span>';
+    return `<div class="ev"><div class="when">${esc(when)}<br><span style="opacity:.7">file ${fmtDate(e.fileDate)}</span></div>
+      <div class="what">${dirpill} ${statusPill(e.status)} <span class="muted mono" style="font-size:11.5px">${esc(e.proc)}/${esc(e.type)}</span>
+      <div style="margin-top:3px">${codePills(e.codes)||'<span class="muted" style="font-size:12px">no codes</span>'}</div>
+      <div class="hint mono" title="${esc(e.file)}">${esc(e.file)}</div></div></div>`; }).join("");
+  body.innerHTML=`<div class="row" style="align-items:baseline"><h2 class="sec">${esc(g.key)}</h2><span class="muted">${esc(g.name||"")}</span><span style="margin-left:auto">${resPill(g.resolution)}</span></div>
+    <div class="muted" style="font-size:13px;margin:4px 0 2px">Sent <b>${g.sent}×</b> · rejected <b style="color:var(--red)">${g.rej}×</b> · pending <b style="color:var(--amber)">${g.pend}×</b> · accepted <b style="color:var(--green)">${g.acc}×</b> · ${g.replies} repl${g.replies===1?"y":"ies"} from BdE</div>
+    ${banner}<h3 style="font-family:var(--serif);font-size:15px;margin:10px 0 2px">History (oldest → newest)</h3><div class="timeline">${evs}</div>
+    <p class="hint">Ordered by when each file arrived. The “file …” date is the date in the file name and may be an earlier reporting period — that is why one key can carry several dates.</p>`;
+  $("#dossier").style.display="flex";
+}
+function closeDossier(){ $("#dossier").style.display="none"; }
+
+/* ---------------- decode (paste a line) ---------------------------------- */
+function renderDecode(){
+  const text=$("#decodeText").value; const dir=$("#decodeDir").value;
+  if(!text.trim()){ $("#decodeResult").innerHTML=""; return; }
+  const out=text.split(/\r?\n/).filter(l=>l.trim()).map((line,i)=>{
+    const type=detectType(line); const codes=extractCodes(line,type); const keys=extractKeys(line);
+    const status=recordStatus(dir,type==="?"?null:type,codes);
+    const codeInfo=codes.map(c=>{const k=kbFind(c);return k?`<div class="kbcard"><span class="code">${esc(c)}</span> ${statusPill(k.severity==="reject"||k.severity==="message"?"REJECTED":k.severity==="pending"?"PENDING":k.severity==="accept"?"ACCEPTED":"INFO")}<div style="margin-top:3px">${esc(k.desc)}</div>${k.action?`<div><b>Fix:</b> ${esc(k.action)}</div>`:""}</div>`:`<div class="kbcard"><span class="code">${esc(c)}</span> <span class="muted">unknown — add its meaning in Error help</span></div>`;}).join("");
+    return `<div style="margin-top:10px"><div><b>Line ${i+1}</b> — ${statusPill(status)} <span class="muted mono" style="font-size:11.5px">${esc(type)} ${esc(RECTYPES[type]||"")}</span></div>
+      ${keys.length?`<div style="font-size:13px;margin-top:3px">Key(s): ${keys.map(k=>`<span class="keylink" data-key="${esc(k)}">${esc(k)}</span>`).join(", ")}</div>`:""}
+      ${codeInfo||'<div class="hint">No result codes detected in this line.</div>'}</div>`;
+  }).join("");
+  $("#decodeResult").innerHTML=out;
+}
+
+/* ---------------- knowledge base editing --------------------------------- */
+function kbAdd(){
+  const code=prompt("Code (e.g. R2345):"); if(!code) return;
+  const severity=prompt("Type — reject / pending / informative / accept / message:","reject")||"informative";
+  const desc=prompt("What it means (you got it because…):","")||"";
+  const action=prompt("How to fix it:","")||"";
+  const entry={code:code.trim(),family:"Custom",severity,desc,action,source:"Added by you"};
+  const i=state.kb.findIndex(k=>k.code===entry.code); if(i>=0) state.kb[i]=entry; else state.kb.unshift(entry);
+  rebuildKbIndex(); reEvaluate(); saveState(); renderAll(); toast("Saved "+entry.code);
+}
+function kbPasteRun(){
+  const text=$("#kbPasteText").value; const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const re=/\b(CM99\d|C99\d{2}|RM\d{3}|R\d{4}|L\d{4}|A\d{4}|NC\d{3})\b/;
+  let added=0,cur=null;
+  const sev=l=>{ const s=l.toLowerCase(); if(/rechaz|no es válid|no es valido|incorrect|debe ser|obligatori/.test(s))return "reject"; if(/aviso|warning/.test(s))return "informative"; if(/baja|pendiente|inconsist|no figura|corr/.test(s))return "pending"; return "informative"; };
+  for(const line of lines){ const m=line.match(re); if(m){ const code=m[1]; let desc=line.slice(line.indexOf(code)+code.length).replace(/^[:.\s)-]+/,"").trim();
+    const e={code,family:/^R/.test(code)?"Record rejection (R)":/^L/.test(code)?"Pending (L)":/^A/.test(code)?"Warning (A)":"Code",severity:sev(line),desc,action:"",source:"Pasted from manual"};
+    const i=state.kb.findIndex(k=>k.code===code); if(i>=0)state.kb[i]=e; else state.kb.unshift(e); cur=e; added++; }
+    else if(cur){ cur.desc=(cur.desc+" "+line).trim(); } }
+  rebuildKbIndex(); reEvaluate(); saveState(); renderAll(); $("#kbPastePanel").style.display="none"; $("#kbPasteText").value=""; toast("Imported "+added+" code(s).");
+}
+function reEvaluate(){
+  let changed=0;
+  for(const r of state.records){ const ns=recordStatus(r.dir,r.type==="?"?null:r.type,r.codes);
+    if(ns!==r.status){ const f=state.files[r.fileKey]; if(f&&f.counts){ f.counts[r.status]=Math.max(0,(f.counts[r.status]||0)-1); f.counts[ns]=(f.counts[ns]||0)+1; } r.status=ns; changed++; } }
+  dataVer++; return changed;
+}
+
+/* ---------------- self-check --------------------------------------------- */
+function selfCheck(){
+  const issues=[]; const recs=state.records, files=Object.values(state.files);
+  let aggR=0,aggP=0; for(const f of files){const c=f.counts||{};aggR+=c.REJECTED||0;aggP+=c.PENDING||0;}
+  const liveR=recs.filter(r=>r.status==="REJECTED").length, liveP=recs.filter(r=>r.status==="PENDING").length;
+  if(aggR!==liveR) issues.push(["warn",`Rejected counter (${aggR}) ≠ stored rejected records (${liveR}). Click ‘Re-check all statuses’.`]);
+  if(aggP!==liveP) issues.push(["warn",`Pending counter (${aggP}) ≠ stored pending records (${liveP}). Click ‘Re-check all statuses’.`]);
+  let badRej=0; for(const r of recs){ const hasR=r.codes.some(c=>/^R\d{4}$/.test(c)||c==="RECHAZADO"); if(hasR&&r.status!=="REJECTED") badRej++; }
+  if(badRej) issues.push(["warn",`${badRej} record(s) carry a rejection code but aren’t marked rejected. Re-check statuses.`]);
+  const unknown=new Set(); for(const r of recs) for(const c of r.codes) if(!kbFind(c)) unknown.add(c);
+  if(unknown.size) issues.push(["info",`${unknown.size} code(s) have no meaning yet: ${[...unknown].slice(0,10).join(", ")}. Add them in Error help.`]);
+  const el=$("#selfCheck");
+  el.innerHTML = issues.length? issues.map(([s,m])=>`<div class="kbcard"><span class="tag ${s==="warn"?"pend":"info"}">${s}</span> ${esc(m)}</div>`).join("")
+    : `<div class="kbcard"><span class="tag ok">clean</span> Everything is consistent across ${recs.length} records / ${files.length} files.</div>`;
+}
+
+/* ---------------- export / import / reset -------------------------------- */
+function download(name,text,type){ const b=new Blob([text],{type:type||"application/json"}); const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1000); }
+
+/* ---------------- events ------------------------------------------------- */
+function on(id,ev,fn){ const el=document.getElementById(id); if(el) el.addEventListener(ev,fn); }
+function debounce(fn,ms){let t;return()=>{clearTimeout(t);t=setTimeout(fn,ms);};}
+
+on("btnHelp","click",()=>{ $$("#nav button").forEach(b=>b.classList.remove("active")); const hb=$('#nav button[data-v="help"]'); if(hb&&hasData()){ hb.classList.add("active"); showView("help"); } else { $("#connectPanel").scrollIntoView({behavior:"smooth"}); } });
+on("btnPickOut","click",()=>pickFolder("out"));
+on("btnPickIn","click",()=>pickFolder("in"));
+on("btnUpdate","click",runUpdate);
+on("btnUpdate2","click",runUpdate);
+on("btnReOut","click",()=>pickFolder("out"));
+on("btnReIn","click",()=>pickFolder("in"));
+on("btnStop","click",()=>{ scanAbort=true; toast("Stopping…"); });
+on("btnStop2","click",()=>{ scanAbort=true; toast("Stopping…"); });
+on("btnAddFiles","click",()=>$("#fileInput").click());
+on("fileInput","change",async e=>{
+  const files=[...(e.target.files||[])]; let n=0,nr=0;
+  for(const f of files){ const cls=classifyName(f.name); if(!cls.proc) continue; const key="manual/"+f.name+"|"+f.size+"|"+f.lastModified; if(state.files[key]) continue;
+    let text=""; try{ text=await f.text(); }catch(err){ continue; }
+    const fmeta={key,name:f.name,path:"manual/"+f.name,size:f.size,mtime:f.lastModified,proc:cls.proc,dir:cls.dir,date:cls.date,readAt:nowIso()};
+    const parsed=parseFileContent(text,fmeta); fmeta.counts=parsed.counts; state.files[key]=fmeta; state.records.push(...parsed.recs); n++; nr+=parsed.recs.length; }
+  if(n){ state.runs.unshift({at:nowIso(),newFiles:n,newRecords:nr,manual:true}); dataVer++; saveState(); renderAll(); }
+  toast(`${n} file(s) added, ${nr} record(s).`); e.target.value="";
+});
+
+// drag & drop
+document.addEventListener("dragover",e=>e.preventDefault());
+document.addEventListener("drop",async e=>{
+  e.preventDefault(); const items=[...(e.dataTransfer&&e.dataTransfer.items||[])]; const dropped=[];
+  for(const it of items){ if(it.kind!=="file") continue; let h=null; try{ if(it.getAsFileSystemHandle) h=await it.getAsFileSystemHandle(); }catch(err){}
+    if(h&&h.kind==="directory"){ const n=h.name.toUpperCase(); const which=/FROM|EDITRAN$|INCOMING|_IN\b/.test(n)&&!/CIRBE_ALL/.test(n)?"in":/CIRBE_ALL|OUT|TRANSMIT_CIRBE/.test(n)?"out":(confirm(`"${h.name}" — OK = received folder (BdE→you), Cancel = sent folder (you→BdE)`)?"in":"out"); setFolder(which,h); }
+    else { const f=it.getAsFile&&it.getAsFile(); if(f) dropped.push(f); } }
+  if(dropped.length){ let n=0,nr=0; for(const f of dropped){ const cls=classifyName(f.name); if(!cls.proc) continue; const key="manual/"+f.name+"|"+f.size+"|"+f.lastModified; if(state.files[key]) continue; let text=""; try{text=await f.text();}catch(err){continue;} const fmeta={key,name:f.name,path:"manual/"+f.name,size:f.size,mtime:f.lastModified,proc:cls.proc,dir:cls.dir,date:cls.date,readAt:nowIso()}; const parsed=parseFileContent(text,fmeta); fmeta.counts=parsed.counts; state.files[key]=fmeta; state.records.push(...parsed.recs); n++; nr+=parsed.recs.length; }
+    if(n){ state.runs.unshift({at:nowIso(),newFiles:n,newRecords:nr,manual:true}); dataVer++; saveState(); renderAll(); toast(`${n} dropped file(s) imported.`); } }
+});
+
+// nav
+function showView(v){ $$(".view").forEach(s=>s.classList.toggle("active",s.id==="v-"+v)); $$("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.v===v)); }
+$("#nav") && $("#nav").addEventListener("click",e=>{ const b=e.target.closest("button[data-v]"); if(b) showView(b.dataset.v); });
+
+// summary cards → navigate
+$("#summary") && $("#summary").addEventListener("click",e=>{ const c=e.target.closest("[data-go]"); if(!c) return; const go=c.dataset.go;
+  if(go==="files"){ showView("files"); }
+  else { showView("todo"); $("#todoKind").value = go==="resolved"?"":go==="awaiting"?"":""; if(go==="resolved"||go==="awaiting"){ /* jump to search with status filter instead */ showView("search"); $("#recStatus").value=go==="resolved"?"ACCEPTED":"SENT"; recPage=250; renderRecords(); } else renderTodo(); }
+});
+
+// todo filters
+on("todoSearch","input",debounce(renderTodo,150));
+on("todoKind","change",renderTodo);
+
+// records filters
+const dRecords=debounce(()=>{recPage=250;renderRecords();},160);
+on("recSearch","input",dRecords); on("recStatus","change",dRecords);
+on("recMore","click",()=>{ recPage+=500; renderRecords(); });
+
+// files filters
+const dFiles=debounce(renderFiles,160);
+on("fileSearch","input",dFiles); on("fileDir","change",dFiles);
+on("fileRange","change",renderFiles); on("fileGroup","change",renderFiles);
+on("btnTodoCsv","click",exportWorklist);
+
+// decode
+on("btnDecode","click",renderDecode);
+
+// kb
+on("kbSearch","input",debounce(renderKb,150));
+on("btnKbAdd","click",kbAdd);
+on("btnKbPaste","click",()=>{ const p=$("#kbPastePanel"); p.style.display=p.style.display==="none"?"block":"none"; });
+on("btnKbPasteRun","click",kbPasteRun);
+on("btnKbPasteCancel","click",()=>{ $("#kbPastePanel").style.display="none"; });
+
+// settings
+on("optSkipInfo","change",e=>{ state.settings.skipInfo=e.target.checked; saveState(); });
+on("optFast","change",e=>{ state.settings.fast=e.target.checked; saveState(); });
+on("btnReeval","click",()=>{ const c=reEvaluate(); saveState(); renderAll(); toast(`Re-checked — ${c} record(s) updated.`); });
+on("btnSelfCheck","click",selfCheck);
+on("btnExport","click",()=>download("cirbe_compass_backup.json",JSON.stringify(state)));
+on("btnImport","click",()=>$("#jsonInput").click());
+on("jsonInput","change",e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ const p=JSON.parse(rd.result); state.files=p.files||{}; state.records=p.records||[]; state.runs=p.runs||[]; state.kb=p.kb&&p.kb.length?p.kb:state.kb; state.entity=p.entity||""; state.settings=Object.assign({skipInfo:true,fast:true},p.settings||{}); dataVer++; reconCache.ver=-1; rebuildKbIndex(); saveState(); renderAll(); toast("Backup imported."); }catch(err){ toast("Could not read that backup file."); } }; rd.readAsText(f); e.target.value=""; });
+on("btnReset","click",()=>{ if(!confirm("Clear all read files and history from this browser? Your actual CIRBE files are not touched. The error dictionary is kept.")) return; state.files={}; state.records=[]; state.runs=[]; dataVer++; reconCache.ver=-1; saveState(); renderAll(); toast("Cleared. Connect folders and Update to start again."); });
+
+// global clicks: keylinks + rows + code pills
+document.body.addEventListener("click",e=>{
+  const kl=e.target.closest(".keylink[data-key]"); if(kl){ openDossier(kl.dataset.key); return; }
+  const cp=e.target.closest(".codepill[data-code]"); if(cp){ if(hasData()){ showView("help"); $("#kbSearch").value=cp.dataset.code; renderKb(); $("#kbSearch").scrollIntoView({block:"center"}); } return; }
+  const todoRow=e.target.closest("#tblTodo tr.click[data-key]"); if(todoRow){ openDossier(todoRow.dataset.key); return; }
+  const recRow=e.target.closest("#tblRecords tr.click[data-key2]"); if(recRow&&recRow.dataset.key2){ openDossier(recRow.dataset.key2); return; }
+  const fRow=e.target.closest("#tblFiles tr.click[data-fkey]"); if(fRow){ openFileKey=openFileKey===fRow.dataset.fkey?null:fRow.dataset.fkey; renderFiles(); return; }
+});
+on("dossierClose","click",closeDossier);
+$("#dossier") && $("#dossier").addEventListener("click",e=>{ if(e.target.id==="dossier") closeDossier(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeDossier(); });
+
+/* ---------------- boot --------------------------------------------------- */
+try{
+  loadState();
+  $("#optSkipInfo").checked=state.settings.skipInfo!==false;
+  $("#optFast").checked=state.settings.fast!==false;
+  if(state.entity) $("#entityLine").textContent="Entity: "+state.entity;
+  renderAll();
+  restoreFolders();
+  $("#jsok").textContent="ready ✓";
+}catch(e){
+  showFatal((e&&e.message||e)+(e&&e.stack?"\n"+String(e.stack).split("\n").slice(0,2).join("\n"):""));
+  $("#jsok").textContent="error ✗";
+}
+</script>
+</body>
+</html>
