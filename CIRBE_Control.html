@@ -155,7 +155,23 @@
   .kbcard .code{font-family:var(--mono);font-weight:700}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:8px}
   .tag.reject{background:var(--redsoft);color:var(--red)} .tag.pend{background:var(--ambersoft);color:var(--amber)} .tag.info{background:var(--bluesoft);color:var(--blue)} .tag.ok{background:var(--greensoft);color:var(--green)} .tag.msg{background:#EEE;color:#555}
-  @media(max-width:760px){ .what,.summary{grid-template-columns:1fr 1fr} .steps{flex-direction:column} .step{border-right:none;border-bottom:1px solid var(--line)} }
+  /* macOS-style column (Miller) browser */
+  .miller{display:flex;border:1px solid var(--line);border-radius:12px;overflow-x:auto;overflow-y:hidden;background:var(--card)}
+  .mcol{flex:1 1 0;min-width:250px;max-width:520px;height:64vh;overflow-y:auto;border-right:1px solid var(--line);padding:6px}
+  .mcol:last-child{border-right:none}
+  .mcol .mtitle{position:sticky;top:0;background:var(--card);font-family:var(--serif);font-size:12.5px;color:var(--ink2);padding:4px 6px 6px;border-bottom:1px solid var(--line);z-index:1}
+  .mrow{padding:7px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent;margin-top:2px}
+  .mrow:hover{background:var(--brandsoft)}
+  .mrow.sel{background:var(--brandsoft);border-color:var(--brand)}
+  .mrow .r1{display:flex;align-items:center;gap:7px;font-size:13px}
+  .mrow .r2{font-size:11.5px;color:var(--ink2);margin-top:2px}
+  .mrow .fname{font-family:var(--mono);font-weight:600;word-break:break-all}
+  .mcolph{color:var(--ink2);font-size:13px;padding:14px 10px;text-align:center}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;display:inline-block}
+  .dot.r{background:var(--red)} .dot.l{background:var(--amber)} .dot.ok{background:var(--green)} .dot.s{background:var(--blue)} .dot.i{background:#bbb}
+  .later{font-size:10.5px;padding:1px 6px;border-radius:999px;margin-left:auto;white-space:nowrap}
+  .later.fixed{background:var(--greensoft);color:var(--green)} .later.open{background:var(--redsoft);color:var(--red)} .later.openp{background:var(--ambersoft);color:var(--amber)}
+  @media(max-width:760px){ .what,.summary{grid-template-columns:1fr 1fr} .steps{flex-direction:column} .step{border-right:none;border-bottom:1px solid var(--line)} .mcol{min-width:82vw;height:60vh} }
 </style>
 </head>
 <body>
@@ -228,7 +244,8 @@
     <div id="breakdown"></div>
 
     <div class="nav" id="nav">
-      <button data-v="todo" class="active">⚠ Needs action</button>
+      <button data-v="explorer" class="active">Explorer</button>
+      <button data-v="todo">⚠ Needs action</button>
       <button data-v="records">Records</button>
       <button data-v="files">Files</button>
       <button data-v="help">Error help</button>
@@ -236,8 +253,25 @@
       <button data-v="settings">Settings</button>
     </div>
 
+    <!-- EXPLORER -->
+    <section class="view active" id="v-explorer">
+      <div class="panel">
+        <h2 class="sec">Browse your files</h2>
+        <p class="sub">Every file you exchanged with Banco de España, newest first. <span class="pill info">↓ Incoming</span> are replies from BdE; <span class="pill sent">↑ Outgoing</span> are what you sent. Click a file to read what’s inside, then click any record to see its full story.</p>
+        <div class="filters" id="expFilters">
+          <input type="text" id="expSearch" placeholder="Filter by file name or date…">
+          <select id="expDir"><option value="">Incoming &amp; outgoing</option><option value="IN">Incoming only (↓)</option><option value="OUT">Outgoing only (↑)</option></select>
+        </div>
+        <div id="expCols" class="miller">
+          <div class="mcol" id="mcolFiles"></div>
+          <div class="mcol" id="mcolRecords"><div class="mcolph">Select a file to read what’s inside</div></div>
+          <div class="mcol" id="mcolDetail"><div class="mcolph">Select a record to see its full story</div></div>
+        </div>
+      </div>
+    </section>
+
     <!-- TODO -->
-    <section class="view active" id="v-todo">
+    <section class="view" id="v-todo">
       <div class="panel">
         <h2 class="sec">What needs your action right now</h2>
         <p class="sub" id="todoSub">These are records that Banco de España rejected or left pending, and that you have not yet fixed and got accepted. Click any one to see its full history.</p>
@@ -752,7 +786,7 @@ function updateStep(){
 }
 function renderAll(){ try{
   rebuildKbIndex(); updateStep();
-  if(hasData()){ renderSummary(); renderTodo(); renderRecords(); renderFiles(); renderTrain(); }
+  if(hasData()){ renderSummary(); renderTodo(); renderRecords(); renderFiles(); renderTrain(); renderExplorer(); }
   renderKb();
 }catch(e){ showFatal(e&&e.message||e); } }
 
@@ -953,6 +987,119 @@ function openDossier(key){
 }
 function closeDossier(){ $("#dossier").style.display="none"; }
 
+/* ---------------- Explorer: macOS-style column browser ------------------ */
+let expSelFile=null, expSelRec=null, expFileLines=[], expSource="disk";
+let expListN=300, expFilePage=500;
+let _keyMap=null,_keyMapVer=-1;
+function keyMap(){ if(_keyMapVer!==dataVer){ _keyMap=new Map(buildGroups().map(g=>[g.key,g])); _keyMapVer=dataVer; } return _keyMap; }
+function expFileDate(f){ return f.mtime?new Date(f.mtime).toISOString().slice(0,16).replace("T"," "):fmtDate(f.date); }
+function statusDot(s){ const c=s==="REJECTED"?"r":s==="PENDING"?"l":s==="ACCEPTED"?"ok":s==="SENT"?"s":"i"; return `<span class="dot ${c}" title="${STATUS_PLAIN[s]||s}"></span>`; }
+async function readFileText(dir,name){
+  if(!dir) return null;
+  try{ if(dir.getFileHandle){ const fh=await dir.getFileHandle(name); const fl=await fh.getFile(); return await fl.text(); } }catch(e){}
+  try{ const it=dir.values(); for(;;){ const r=await it.next(); if(r.done)break; const v=r.value; if(v&&v.kind==="file"&&v.name===name){ const fl=await v.getFile(); return await fl.text(); } } }catch(e){}
+  return null;
+}
+function parseAllLines(text,f){
+  const out=[]; const lines=text.split(/\r?\n/); let ln=0;
+  for(const line of lines){ ln++; if(!line.trim())continue;
+    const type=detectType(line); const codes=extractCodes(line,type); const keys=extractKeys(line);
+    out.push({lineNo:ln,raw:line,type,codes,keys,status:recordStatus(f.dir,type==="?"?null:type,codes)}); }
+  return out;
+}
+function keyOutcome(key){ const g=key?keyMap().get(key):null; return g?g.resolution:null; }   /* forward-looking across all files */
+function laterTag(recStatus,key){
+  if(recStatus!=="REJECTED"&&recStatus!=="PENDING") return "";
+  const res=keyOutcome(key);
+  if(res==="RESOLVED") return '<span class="later fixed">✓ fixed later</span>';
+  if(res==="OPEN_REJECTED") return '<span class="later open">● still rejected</span>';
+  if(res==="OPEN_PENDING") return '<span class="later openp">● still pending</span>';
+  return "";
+}
+/* COLUMN 1 — files (newest first) */
+function renderExplorer(){
+  if(!$("#mcolFiles")) return;
+  if(expSelFile && !state.files[expSelFile]){ expSelFile=null; expSelRec=null;
+    if($("#mcolRecords")) $("#mcolRecords").innerHTML='<div class="mcolph">Select a file to read what\u2019s inside</div>';
+    if($("#mcolDetail")) $("#mcolDetail").innerHTML='<div class="mcolph">Select a record to see its full story</div>'; }
+  const q=($("#expSearch")?$("#expSearch").value:"").toLowerCase().trim();
+  const df=$("#expDir")?$("#expDir").value:"";
+  let files=Object.values(state.files);
+  if(df) files=files.filter(f=>f.dir===df);
+  if(q) files=files.filter(f=>(f.name||"").toLowerCase().includes(q)||expFileDate(f).toLowerCase().includes(q));
+  files.sort((a,b)=>(b.mtime||0)-(a.mtime||0)||String(b.date||"").localeCompare(String(a.date||"")));
+  const total=files.length, shown=files.slice(0,expListN);
+  const rows=shown.map(f=>{ const c=f.counts||{}; const recN=Object.values(c).reduce((s,v)=>s+v,0); const v=fileVerdict(f);
+    return `<div class="mrow${f.key===expSelFile?" sel":""}" data-expfile="${esc(f.key)}">
+      <div class="r1">${statusDot(v)}<span class="fname">${esc(f.name)}</span></div>
+      <div class="r2">${f.dir==="OUT"?"\u2191 Outgoing":"\u2193 Incoming"} \u00b7 ${esc(expFileDate(f))} \u00b7 ${recN} rec</div></div>`; }).join("");
+  $("#mcolFiles").innerHTML = `<div class="mtitle">Files \u2014 newest first (${total})</div>`+
+    (total?rows:'<div class="mcolph">No files yet \u2014 click \u27f3 Update.</div>')+
+    (total>expListN?`<div class="mrow" id="expMore" style="text-align:center;color:var(--brand)">Show more\u2026</div>`:"");
+}
+/* COLUMN 2 — records inside the selected file (read fresh from disk) */
+async function selectExpFile(key){
+  expSelFile=key; expSelRec=null; expFilePage=500; expSource="disk";
+  renderExplorer();
+  if($("#mcolDetail")) $("#mcolDetail").innerHTML='<div class="mcolph">Select a record to see its full story</div>';
+  const f=state.files[key];
+  if(!f){ $("#mcolRecords").innerHTML='<div class="mcolph">File not found.</div>'; return; }
+  $("#mcolRecords").innerHTML=`<div class="mtitle">${esc(f.name)}</div><div class="mcolph">Reading\u2026</div>`;
+  let lines=null; const dir=f.dir==="OUT"?dirOut:dirIn;
+  try{ const text=await readFileText(dir,f.name); if(text!=null) lines=parseAllLines(text,f); }catch(e){}
+  if(!lines){ expSource="stored"; lines=state.records.filter(r=>r.fileKey===key).map(r=>({lineNo:r.lineNo,raw:r.raw||"",type:r.type,codes:r.codes||[],keys:r.keys||[],status:r.status})).sort((a,b)=>a.lineNo-b.lineNo); }
+  expFileLines=lines; renderExpRecords(f);
+}
+function renderExpRecords(f){
+  if(!f||!$("#mcolRecords")) return;
+  const lines=expFileLines, total=lines.length, shown=lines.slice(0,expFilePage);
+  const rows=shown.map(l=>{ const key=(l.keys&&l.keys[0])||null;
+    return `<div class="mrow${String(l.lineNo)===String(expSelRec)?" sel":""}" data-exprec="${l.lineNo}">
+      <div class="r1">${statusDot(l.status)}<span class="mono" style="font-size:12px">${esc(l.type)}</span>${laterTag(l.status,key)}</div>
+      <div class="r2">${key?esc(key)+" \u00b7 ":""}${(l.codes||[]).slice(0,4).map(esc).join(", ")||"no codes"}</div></div>`; }).join("");
+  $("#mcolRecords").innerHTML=`<div class="mtitle">${esc(f.name)} \u2014 ${total} record${total===1?"":"s"}${expSource==="stored"?" (stored)":""}</div>`+
+    (total?rows:'<div class="mcolph">No records.</div>')+
+    (total>expFilePage?`<div class="mrow" id="expFileMore" style="text-align:center;color:var(--brand)">Show more\u2026</div>`:"");
+}
+/* COLUMN 3 — record detail with forward-looking outcome */
+function selectExpRecord(lineNo){
+  expSelRec=lineNo; renderExpRecords(state.files[expSelFile]);
+  const l=expFileLines.find(x=>String(x.lineNo)===String(lineNo)), f=state.files[expSelFile];
+  if(!l||!f){ $("#mcolDetail").innerHTML='<div class="mcolph">\u2014</div>'; return; }
+  const key=(l.keys&&l.keys[0])||null;
+  const g=key?keyMap().get(key):null;
+  let outcome="";
+  if(g){
+    if(g.resolution==="RESOLVED"&&g.rej>0) outcome=`<div class="banner resolved"><b>\u2713 Resolved.</b> Rejected ${g.rej}\u00d7 then resent and <b>accepted</b> on ${fmtDate(g.resAt)}. This older rejection is fixed \u2014 nothing to do.</div>`;
+    else if(g.resolution==="RESOLVED") outcome=`<div class="banner resolved"><b>\u2713 Accepted</b> on ${fmtDate(g.resAt)}. Nothing to do.</div>`;
+    else if(g.resolution==="OPEN_REJECTED") outcome=`<div class="banner openrej"><b>Action needed.</b> The latest reply for this key is still a <b>rejection</b>. Fix and resend.</div>`;
+    else if(g.resolution==="OPEN_PENDING") outcome=`<div class="banner openpend"><b>Action needed.</b> Latest state is <b>pending correction</b>.</div>`;
+    else if(g.resolution==="AWAITING") outcome=`<div class="banner await"><b>Sent \u2014 awaiting reply.</b> No rejection or pending notice on record.</div>`;
+  }
+  const codeInfo=(l.codes||[]).map(c=>{const k=kbFind(c);return k?`<div class="kbcard"><span class="code">${esc(c)}</span> ${statusPill(k.severity==="reject"||k.severity==="message"?"REJECTED":k.severity==="pending"?"PENDING":k.severity==="accept"?"ACCEPTED":"INFO")}<div style="margin-top:3px">${esc(k.desc)}</div>${k.action?`<div><b>Fix:</b> ${esc(k.action)}</div>`:""}</div>`:`<div class="kbcard"><span class="code">${esc(c)}</span> <span class="muted">no meaning yet \u2014 teach it in Train detection</span></div>`;}).join("")||'<div class="muted" style="font-size:13px">No result codes on this line.</div>';
+  const kv=(lab,val)=>`<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--line)"><div style="width:78px;color:var(--ink2);font-size:12.5px">${lab}</div><div style="flex:1;font-size:13px">${val}</div></div>`;
+  let pairing="";
+  if(key){
+    const ev=state.records.filter(r=>(r.keys||[]).includes(key)).map(r=>({dir:r.dir,mtime:r.mtime,fileDate:r.fileDate,file:r.file,type:r.type,codes:r.codes||[],status:r.status}));
+    ev.sort((a,b)=>(a.mtime||0)-(b.mtime||0)||String(a.fileDate).localeCompare(String(b.fileDate)));
+    const evRow=e=>`<div class="ev"><div class="when">${e.mtime?new Date(e.mtime).toISOString().slice(0,16).replace("T"," "):""}<br><span style="opacity:.7">file ${esc(fmtDate(e.fileDate))}</span></div><div class="what">${statusPill(e.status)} <span class="muted mono" style="font-size:11px">${esc(e.type)}</span><div style="margin-top:3px">${codePills(e.codes)||'<span class="muted" style="font-size:11.5px">no codes</span>'}</div><div class="hint mono" title="${esc(e.file)}">${esc(e.file)}</div></div></div>`;
+    const sent=ev.filter(e=>e.dir==="OUT"), recv=ev.filter(e=>e.dir==="IN");
+    pairing=`<h4 style="font-family:var(--serif);margin:12px 0 2px">\u2191 What you sent</h4>${sent.length?`<div class="timeline">${sent.map(evRow).join("")}</div>`:'<div class="muted" style="font-size:12.5px">Nothing on record.</div>'}
+      <h4 style="font-family:var(--serif);margin:12px 0 2px">\u2193 What came back</h4>${recv.length?`<div class="timeline">${recv.map(evRow).join("")}</div>`:'<div class="muted" style="font-size:12.5px">No reply on record.</div>'}`;
+  }
+  $("#mcolDetail").innerHTML=`<div class="mtitle">Record details</div>
+    ${outcome}
+    ${kv("Date",`${esc(expFileDate(f))}`)}
+    ${kv("File",`<span class="mono" style="font-size:12px">${esc(f.name)}</span>`)}
+    ${kv("Direction",`${f.dir==="OUT"?"\u2191 you \u2192 BdE":"\u2193 BdE \u2192 you"}`)}
+    ${kv("Type",`<span class="mono">${esc(l.type)} ${esc(RECTYPES[l.type]||"")}</span>`)}
+    ${kv("Status here",statusPill(l.status))}
+    ${kv("Key",`<span class="mono">${esc(key||"\u2014")}</span>`)}
+    <div style="margin-top:8px"><b style="font-size:13px">Raw line</b><div class="mono" style="font-size:11px;background:var(--brandsoft);padding:7px;border-radius:8px;word-break:break-all;margin-top:3px">${esc(l.raw)}</div></div>
+    <div style="margin-top:10px"><b style="font-size:13px">What the codes mean</b>${codeInfo}</div>
+    ${key?pairing+`<p class="hint">Full send/receive history for ${esc(key)} across all files.</p>`:'<p class="hint" style="margin-top:10px">No tracking key on this line (header/structural), so no send/receive pairing.</p>'}`;
+}
+
 /* ---------------- decode (paste a line) ---------------------------------- */
 function renderDecode(){
   const text=$("#decodeText").value; const dir=$("#decodeDir").value;
@@ -1052,7 +1199,16 @@ document.addEventListener("drop",async e=>{
 
 // nav
 function showView(v){ $$(".view").forEach(s=>s.classList.toggle("active",s.id==="v-"+v)); $$("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.v===v)); }
-$("#nav") && $("#nav").addEventListener("click",e=>{ const b=e.target.closest("button[data-v]"); if(b) showView(b.dataset.v); });
+$("#nav") && $("#nav").addEventListener("click",e=>{ const b=e.target.closest("button[data-v]"); if(b){ showView(b.dataset.v); if(b.dataset.v==="explorer") renderExplorer(); } });
+// explorer column-browser delegation + filters
+$("#expCols") && $("#expCols").addEventListener("click",e=>{
+  const fb=e.target.closest("[data-expfile]"); if(fb){ selectExpFile(fb.dataset.expfile); return; }
+  const rb=e.target.closest("[data-exprec]"); if(rb){ selectExpRecord(rb.dataset.exprec); return; }
+  if(e.target.closest("#expMore")){ expListN+=300; renderExplorer(); return; }
+  if(e.target.closest("#expFileMore")){ expFilePage+=500; renderExpRecords(state.files[expSelFile]); return; }
+});
+on("expSearch","input",()=>{ expListN=300; renderExplorer(); });
+on("expDir","change",()=>{ expListN=300; renderExplorer(); });
 
 // summary cards → navigate
 $("#summary") && $("#summary").addEventListener("click",e=>{ const c=e.target.closest("[data-go]"); if(!c) return; const go=c.dataset.go;
