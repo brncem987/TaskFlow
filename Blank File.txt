@@ -1,0 +1,1 @@
+The file investigator does not works as expected, created by documentation of BdE web site but not easy to track the records as expected. 
