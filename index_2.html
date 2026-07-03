@@ -2872,16 +2872,25 @@ const App = {
       ctrlCheck(o, 'Original');
       ps.forEach((p, i) => ctrlCheck(p, `Part ${i + 1}`));
       /* envelope, size, duplication */
-      const envBad = ps.filter(p => p.nip !== o.nip || p.dataOd !== o.dataOd || p.dataDo !== o.dataDo);
-      if (envBad.length) add('err', 'Envelope differs in some parts', envBad.map(p => p.name).join(', ') + ' — NIP or reporting period does not match the original.');
-      else add('ok', 'Envelope identical', `NIP ${o.nip}, period ${o.dataOd} → ${o.dataDo} in every part.`);
+      const nipBad = ps.filter(p => p.nip !== o.nip);
+      if (nipBad.length) add('err', 'NIP differs in some parts', nipBad.map(p => p.name).join(', ') + ' — does not match the original.');
+      else add('ok', 'NIP identical', `NIP ${o.nip} in every part.`);
+      const samePeriod = ps.every(p => p.dataOd === o.dataOd && p.dataDo === o.dataDo);
+      const subPeriods = !samePeriod && ps.every(p => p.dataOd >= o.dataOd && p.dataDo <= o.dataDo);
+      if (samePeriod)
+        add('warn', 'Record-based split — identical DataOd–DataDo in every part',
+          'The mechanism documented by MF for large JPK_KR_PD files is a PERIOD split: the taxpayer may generate partial files for any periods not shorter than one day, each with its own DataOd–DataDo (MF FAQ JPK_PD, questions 39 & 106; SKwP presentation 12.2025). Parts that all declare the full-year period are a technical record split, not that documented convention — obtain acceptance from the tax office / advisor before submitting.');
+      else if (subPeriods)
+        add('ok', 'Period-based split', 'Each part declares its own sub-period within the original reporting year — consistent with the MF partial-file mechanism (periods ≥ 1 day).');
+      else
+        add('err', 'Part periods outside the original range', 'DataOd–DataDo of some parts falls outside the original reporting period.');
       ps.forEach((p, i) => p.size <= MF_LIMIT
         ? add('ok', `Part ${i + 1} under the 100 MB limit`, fmtBytes(p.size))
         : add('err', `Part ${i + 1} EXCEEDS 100 MB`, fmtBytes(p.size)));
       if (ps.length > 1 && ps.every(p => p.zois && p.zois === o.zois))
-        add('warn', 'ZOiS duplicated in every part', `Each part carries the full ZOiS (${fmtInt(o.zois)} accounts) so it validates standalone — but if the authority aggregates parts, ZOiS is counted ${ps.length}×. Confirm the split-submission convention with the tax office / advisor.`);
+        add('warn', 'ZOiS duplicated in every part', `Each part carries the full ZOiS (${fmtInt(o.zois)} accounts). MF FAQ JPK_PD question 106 addresses exactly this: in partial (period) files, what ZOiS scope to report — which confirms partial files each carry their own ZOiS section. For a record-based split with identical periods, duplicated identical ZOiS is unvalidated territory — confirm with the tax office / advisor.`);
       if (ps.filter(p => p.rpd).length > 1)
-        add('warn', 'RPD duplicated in multiple parts', 'Tax result section (K_1…K_8) appears in more than one part — the amounts would be read twice.');
+        add('warn', 'RPD duplicated in multiple parts', 'Per MF FAQ JPK_PD question 39, for partial JPK_KR_PD files the RPD section is expected to carry interim values (e.g. 0) in earlier parts and the final full-year tax figures only in the LAST part. Identical final RPD amounts repeated in every part risks the K_1…K_8 values being read twice — align with the MF answer / tax advisor before submitting.');
       Recon.report = { scans, issues };
       Log.add(`Reconcile: ${issues.filter(i => i.sev === 'err').length} error(s), ${issues.filter(i => i.sev === 'warn').length} warning(s).`, 'ok');
       Toast.show('Reconciliation finished', 'ok');
