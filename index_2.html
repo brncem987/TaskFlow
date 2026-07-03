@@ -1,0 +1,2690 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JPK Studio — XML Processing Studio (JPK_CIT / JPK_KR_PD)</title>
+<style>
+/* ============================================================
+   JPK STUDIO — design tokens
+   ============================================================ */
+:root{
+  --radius:12px; --radius-s:8px;
+  --font-ui:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,"Cascadia Code",Consolas,"SF Mono",Menlo,monospace;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --tr:180ms cubic-bezier(.4,0,.2,1);
+}
+html[data-theme="dark"]{
+  --bg:#0b0f1a; --bg2:#0e1424; --panel:#121a2c; --panel2:#0f1522;
+  --glass:rgba(18,26,44,.78); --line:#232d48; --line2:#1a2338;
+  --text:#e8edf8; --muted:#8d98b6; --faint:#5a6580;
+  --accent:#e9b44c; --accent-ink:#1a1200; --accent2:#5b9dff;
+  --ok:#3ecf8e; --warn:#f0a24b; --err:#ff5d6c; --sel:#2a3a63;
+  --editor-bg:#0d1322; --gutter:#0a0f1c;
+  --hl-tag:#7fb4ff; --hl-attr:#e9b44c; --hl-val:#7fe0b4; --hl-com:#697694; --hl-pi:#c792ea; --hl-txt:#dfe6f5;
+}
+html[data-theme="light"]{
+  --bg:#eef1f7; --bg2:#e6eaf3; --panel:#ffffff; --panel2:#f6f8fc;
+  --glass:rgba(255,255,255,.85); --line:#d8deec; --line2:#e6eaf3;
+  --text:#17203a; --muted:#5a6580; --faint:#9aa4bd;
+  --accent:#b07c14; --accent-ink:#fff; --accent2:#2b6fd6;
+  --ok:#149a63; --warn:#c07417; --err:#d33b4d; --sel:#dbe6ff;
+  --editor-bg:#fbfcff; --gutter:#f1f4fa;
+  --hl-tag:#1a5fd0; --hl-attr:#9a6700; --hl-val:#0f7d54; --hl-com:#8b93a7; --hl-pi:#8331c8; --hl-txt:#22304f;
+  --shadow:0 10px 30px rgba(30,45,90,.14);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font-ui); font-size:14px; color:var(--text);
+  background:radial-gradient(1200px 700px at 85% -10%, var(--bg2), transparent 60%), var(--bg);
+  overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--text)}
+::selection{background:var(--sel)}
+:focus-visible{outline:2px solid var(--accent2);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- app frame ---------- */
+#app{display:grid;grid-template-rows:52px 1fr auto 26px;height:100vh}
+/* toolbar */
+#toolbar{
+  display:flex;align-items:center;gap:10px;padding:0 14px;
+  background:var(--glass);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);z-index:30;
+}
+#brand{display:flex;align-items:center;gap:10px;margin-right:6px;user-select:none}
+#brand .mark{
+  width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),#c8892a);color:#181000;
+  font-weight:800;font-size:13px;letter-spacing:-.5px;box-shadow:0 4px 14px rgba(233,180,76,.35);
+}
+#brand .name{font-weight:700;letter-spacing:.2px}
+#brand .name small{display:block;font-size:10px;color:var(--muted);font-weight:500;letter-spacing:.6px;text-transform:uppercase}
+.tbtn{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:var(--radius-s);
+  border:1px solid transparent;color:var(--text);transition:background var(--tr),border-color var(--tr);
+  white-space:nowrap;
+}
+.tbtn:hover{background:var(--panel2);border-color:var(--line)}
+.tbtn.primary{background:var(--accent);color:var(--accent-ink);font-weight:600;box-shadow:0 4px 14px rgba(233,180,76,.28)}
+.tbtn.primary:hover{filter:brightness(1.06)}
+.tbtn svg{width:15px;height:15px;flex:none}
+#toolbar .spacer{flex:1}
+#limit-chip{
+  display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--panel2);font-size:12px;color:var(--muted);
+}
+#limit-chip b{color:var(--accent)}
+#limit-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+#limit-chip.ok .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+#limit-chip.over .dot{background:var(--err);box-shadow:0 0 8px var(--err)}
+
+/* ---------- main split ---------- */
+#main{display:flex;min-height:0}
+#sidebar{
+  width:224px;min-width:170px;max-width:420px;flex:none;display:flex;flex-direction:column;
+  background:var(--panel2);border-right:1px solid var(--line);transition:margin var(--tr);
+}
+#sidebar.collapsed{margin-left:-260px}
+#sidebar nav{padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+.navbtn{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-s);
+  color:var(--muted);font-weight:500;text-align:left;transition:all var(--tr);border:1px solid transparent;
+}
+.navbtn svg{width:16px;height:16px;flex:none}
+.navbtn:hover{color:var(--text);background:var(--panel)}
+.navbtn.active{color:var(--text);background:var(--panel);border-color:var(--line);box-shadow:inset 3px 0 0 var(--accent)}
+.navbtn .kbd{margin-left:auto;font-size:10px;color:var(--faint)}
+#sidebar .sec{padding:14px 14px 6px;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);font-weight:700}
+#recent{flex:1;overflow:auto;padding:0 8px 10px}
+.recent-item{
+  display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;
+  padding:8px 10px;border-radius:var(--radius-s);border:1px solid transparent;transition:all var(--tr);
+}
+.recent-item:hover{background:var(--panel);border-color:var(--line)}
+.recent-item .rn{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent-item .rm{font-size:11px;color:var(--faint)}
+#side-resizer{width:5px;cursor:col-resize;flex:none;background:transparent;transition:background var(--tr)}
+#side-resizer:hover{background:var(--accent2)}
+
+#content{flex:1;display:flex;flex-direction:column;min-width:0}
+/* tabs */
+#tabs{display:flex;align-items:flex-end;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--line);background:var(--bg2);overflow-x:auto}
+.tab{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px 10px 0 0;
+  border:1px solid var(--line);border-bottom:none;background:var(--panel2);color:var(--muted);
+  max-width:220px;transition:all var(--tr);font-size:13px;
+}
+.tab .tn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab.active{background:var(--panel);color:var(--text);box-shadow:inset 0 2px 0 var(--accent)}
+.tab .x{opacity:.5;border-radius:4px;padding:0 3px}
+.tab .x:hover{opacity:1;background:var(--err);color:#fff}
+#tabs:empty{display:none}
+
+#views{flex:1;overflow:auto;padding:18px;min-height:0}
+.view{display:none;animation:fadein .22s ease}
+.view.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---------- generic panels ---------- */
+.grid{display:grid;gap:14px}
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;box-shadow:var(--shadow);
+}
+.card h3{font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px}
+.metric{font-size:26px;font-weight:700;letter-spacing:-.5px}
+.metric small{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+.field input,.field select{
+  background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius-s);
+  padding:8px 10px;min-width:120px;transition:border-color var(--tr);
+}
+.field input:focus,.field select:focus{border-color:var(--accent2);outline:none}
+.btn{
+  padding:8px 14px;border-radius:var(--radius-s);border:1px solid var(--line);
+  background:var(--panel2);transition:all var(--tr);font-weight:500;
+  display:inline-flex;align-items:center;gap:7px;
+}
+.btn:hover{border-color:var(--accent2);background:var(--panel)}
+.btn.acc{background:var(--accent);border-color:transparent;color:var(--accent-ink);font-weight:600}
+.btn.acc:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--err)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--line)}
+.pill.ok{color:var(--ok);border-color:var(--ok)}
+.pill.err{color:var(--err);border-color:var(--err)}
+.pill.warn{color:var(--warn);border-color:var(--warn)}
+.pill.info{color:var(--accent2);border-color:var(--accent2)}
+.muted{color:var(--muted)} .small{font-size:12px}
+hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
+table.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+table.tbl th{text-align:left;color:var(--muted);font-weight:600;padding:7px 10px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+table.tbl td{padding:7px 10px;border-bottom:1px solid var(--line2);font-family:var(--font-mono);font-size:12px}
+table.tbl tr:hover td{background:var(--panel2)}
+.bar{height:8px;border-radius:99px;background:var(--line2);overflow:hidden}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:99px;transition:width .3s ease}
+
+/* ---------- dropzone ---------- */
+#drop{
+  border:2px dashed var(--line);border-radius:var(--radius);padding:44px 20px;text-align:center;
+  color:var(--muted);transition:all var(--tr);background:var(--panel2);
+}
+#drop.hot{border-color:var(--accent);color:var(--accent);background:var(--panel);transform:scale(1.005)}
+#drop .big{font-size:17px;color:var(--text);font-weight:600;margin-bottom:6px}
+#drop kbd{font-family:var(--font-mono);background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px}
+
+/* ---------- editor ---------- */
+#editor-wrap{display:flex;flex-direction:column;height:calc(100vh - 214px);min-height:320px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--editor-bg)}
+#editor-bar{display:flex;gap:6px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#editor-bar .btn{padding:5px 10px;font-size:12px}
+#findbar{display:none;gap:6px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+#findbar.show{display:flex}
+#findbar input{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-family:var(--font-mono);font-size:12px;width:180px}
+#findbar .cnt{font-size:11px;color:var(--muted);min-width:70px}
+#editor-body{position:relative;flex:1;display:flex;min-height:0}
+#gutter{
+  flex:none;width:56px;background:var(--gutter);color:var(--faint);text-align:right;
+  padding:10px 8px 10px 0;font-family:var(--font-mono);font-size:12.5px;line-height:1.55;
+  overflow:hidden;user-select:none;border-right:1px solid var(--line2);white-space:pre;
+}
+#gutter .cur{color:var(--accent);font-weight:700}
+#edstack{position:relative;flex:1;min-width:0}
+#hilite,#ed{
+  position:absolute;inset:0;padding:10px 14px;font-family:var(--font-mono);font-size:12.5px;line-height:1.55;
+  white-space:pre;overflow:auto;tab-size:2;
+}
+#hilite{pointer-events:none;color:var(--hl-txt)}
+#hilite .curline{background:linear-gradient(90deg,var(--sel),transparent);display:inline-block;width:100%}
+#ed{
+  background:transparent;border:none;resize:none;color:transparent;caret-color:var(--accent);
+  outline:none;z-index:2;
+}
+#ed.plain{color:var(--text)}
+.t-tag{color:var(--hl-tag)} .t-attr{color:var(--hl-attr)} .t-val{color:var(--hl-val)}
+.t-com{color:var(--hl-com);font-style:italic} .t-pi{color:var(--hl-pi)} .t-cd{color:var(--hl-val)}
+
+/* ---------- tree ---------- */
+#tree{font-family:var(--font-mono);font-size:12.5px;line-height:1.7}
+.tnode{margin-left:16px}
+.tnode>.trow{display:flex;align-items:center;gap:5px;border-radius:5px;padding:1px 6px;cursor:default}
+.tnode>.trow:hover{background:var(--panel2)}
+.twist{width:14px;flex:none;color:var(--faint);cursor:pointer;transition:transform var(--tr);display:inline-block;text-align:center}
+.tnode.open>.trow .twist{transform:rotate(90deg)}
+.tnode>.kids{display:none}
+.tnode.open>.kids{display:block}
+.tname{color:var(--hl-tag)} .tattr{color:var(--hl-attr)} .ttext{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:460px}
+.tcount{color:var(--faint);font-size:11px}
+
+/* ---------- issues ---------- */
+.issue{display:flex;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-s);margin-bottom:8px;background:var(--panel2);align-items:flex-start}
+.issue .ic{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px}
+.issue.err .ic{background:var(--err)} .issue.warn .ic{background:var(--warn)} .issue.ok .ic{background:var(--ok)} .issue.info .ic{background:var(--accent2)}
+.issue b{font-size:13px} .issue .d{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ---------- logs drawer ---------- */
+#logs-drawer{border-top:1px solid var(--line);background:var(--panel2);display:none;flex-direction:column;height:180px;min-height:70px;max-height:60vh}
+#logs-drawer.show{display:flex}
+#logs-head{display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid var(--line2);cursor:row-resize;user-select:none}
+#logs-head b{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+#logs-body{flex:1;overflow:auto;font-family:var(--font-mono);font-size:11.5px;padding:8px 12px}
+.logline{padding:1px 0;color:var(--muted)} .logline .lt{color:var(--faint)} 
+.logline.err{color:var(--err)} .logline.warn{color:var(--warn)} .logline.ok{color:var(--ok)}
+
+/* ---------- statusbar ---------- */
+#statusbar{
+  display:flex;align-items:center;gap:16px;padding:0 14px;font-size:11.5px;color:var(--muted);
+  background:var(--panel2);border-top:1px solid var(--line);
+}
+#statusbar .sitem{display:flex;gap:5px;align-items:center;white-space:nowrap}
+#statusbar .grow{flex:1}
+#sb-progress{width:160px;display:none}
+#sb-progress.show{display:block}
+
+/* ---------- toasts ---------- */
+#toasts{position:fixed;right:18px;bottom:44px;display:flex;flex-direction:column;gap:8px;z-index:100}
+.toast{
+  min-width:240px;max-width:360px;padding:11px 14px;border-radius:var(--radius);
+  background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--line);
+  box-shadow:var(--shadow);animation:toast-in .25s ease;font-size:13px;display:flex;gap:9px;align-items:flex-start;
+}
+.toast .tic{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px;background:var(--accent2)}
+.toast.ok .tic{background:var(--ok)} .toast.err .tic{background:var(--err)} .toast.warn .tic{background:var(--warn)}
+.toast.out{animation:toast-out .25s ease forwards}
+@keyframes toast-in{from{opacity:0;transform:translateX(24px)}to{opacity:1}}
+@keyframes toast-out{to{opacity:0;transform:translateX(24px)}}
+
+/* ---------- dialog ---------- */
+#overlay{position:fixed;inset:0;background:rgba(4,7,15,.55);backdrop-filter:blur(3px);display:none;place-items:center;z-index:90}
+#overlay.show{display:grid}
+#dialog{
+  width:min(520px,92vw);max-height:84vh;overflow:auto;background:var(--glass);backdrop-filter:blur(18px);
+  border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:20px;
+  animation:dlg .2s ease;
+}
+@keyframes dlg{from{opacity:0;transform:scale(.96)}to{opacity:1}}
+#dialog h2{font-size:16px;margin-bottom:12px}
+#dialog .dbody{font-size:13px;color:var(--muted);line-height:1.6}
+#dialog .dfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+#dialog input[type=text],#dialog input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:8px}
+
+/* ---------- context menu ---------- */
+#ctxmenu{
+  position:fixed;z-index:110;display:none;min-width:190px;padding:6px;
+  background:var(--glass);backdrop-filter:blur(16px);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow);
+}
+#ctxmenu button{display:flex;width:100%;justify-content:space-between;gap:16px;padding:7px 11px;border-radius:7px;font-size:13px;text-align:left}
+#ctxmenu button:hover{background:var(--panel)}
+#ctxmenu .kbd{color:var(--faint);font-size:11px}
+#ctxmenu hr{border:none;border-top:1px solid var(--line);margin:5px 4px}
+
+/* ---------- gauge / charts ---------- */
+.gauge-wrap{display:flex;gap:18px;align-items:center}
+canvas{max-width:100%}
+.legend{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.legend .li{display:flex;gap:8px;align-items:center;color:var(--muted)}
+.legend .sw{width:10px;height:10px;border-radius:3px;flex:none}
+
+/* split results */
+.part{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid var(--line);border-radius:var(--radius-s);margin-bottom:7px;background:var(--panel2)}
+.part .pn{font-family:var(--font-mono);font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.part .ps{font-size:11.5px;color:var(--muted);white-space:nowrap}
+
+kbd.k{font-family:var(--font-mono);background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:11px}
+.shortcuts td{padding:5px 10px;font-size:12.5px}
+
+@media (max-width:860px){
+  #sidebar{position:absolute;z-index:40;height:calc(100vh - 78px);top:52px;box-shadow:var(--shadow)}
+  #views{padding:12px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ======================= TOOLBAR ======================= -->
+  <header id="toolbar" role="toolbar" aria-label="Main toolbar">
+    <button class="tbtn" id="btn-sidebar" title="Toggle sidebar (Ctrl+B)" aria-label="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div id="brand"><div class="mark">JS</div>
+      <div class="name">JPK Studio<small>XML processing · JPK_CIT</small></div>
+    </div>
+    <button class="tbtn primary" id="btn-open">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0-12 4 4m-4-4L8 7M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      Open XML
+    </button>
+    <button class="tbtn" id="btn-sample">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4M15 3h6v6M10 14 21 3"/></svg>
+      Sample JPK_KR_PD
+    </button>
+    <button class="tbtn" id="btn-validate-quick">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>
+      Validate
+    </button>
+    <button class="tbtn" id="btn-split-quick">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3M12 8v8"/></svg>
+      Split
+    </button>
+    <div class="spacer"></div>
+    <div id="limit-chip" title="Ministry of Finance gateway limit for a single JPK file">
+      <span class="dot"></span><span>MF gateway limit&nbsp;<b>100 MB</b></span><span id="chip-size"></span>
+    </div>
+    <button class="tbtn" id="btn-logs" title="Toggle logs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"/></svg>
+    </button>
+    <button class="tbtn" id="btn-theme" title="Toggle theme (Ctrl+J)" aria-label="Toggle color theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+    </button>
+    <button class="tbtn" id="btn-help" title="Keyboard shortcuts (F1)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.8.3-1.4 1-1.4 1.9v.3M12 17h.01"/></svg>
+    </button>
+  </header>
+
+  <!-- ======================= MAIN ======================= -->
+  <div id="main">
+    <aside id="sidebar" aria-label="Navigation">
+      <nav id="nav"></nav>
+      <div class="sec">Recent files</div>
+      <div id="recent" aria-label="Recent files"></div>
+    </aside>
+    <div id="side-resizer" title="Drag to resize sidebar" aria-hidden="true"></div>
+
+    <div id="content">
+      <div id="tabs" role="tablist" aria-label="Open documents"></div>
+      <div id="views">
+        <section class="view" id="view-dashboard" role="tabpanel"></section>
+        <section class="view" id="view-editor" role="tabpanel"></section>
+        <section class="view" id="view-tree" role="tabpanel"></section>
+        <section class="view" id="view-validate" role="tabpanel"></section>
+        <section class="view" id="view-split" role="tabpanel"></section>
+        <section class="view" id="view-analyze" role="tabpanel"></section>
+        <section class="view" id="view-export" role="tabpanel"></section>
+        <section class="view" id="view-settings" role="tabpanel"></section>
+      </div>
+      <div id="logs-drawer">
+        <div id="logs-head"><b>Activity log</b><span class="small muted" id="logs-count"></span>
+          <span style="flex:1"></span>
+          <button class="btn" id="btn-logs-clear" style="padding:3px 9px;font-size:11px">Clear</button>
+          <button class="btn" id="btn-logs-close" style="padding:3px 9px;font-size:11px">Close</button>
+        </div>
+        <div id="logs-body" role="log" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= STATUS BAR ======================= -->
+  <footer id="statusbar">
+    <span class="sitem" id="sb-file">No file loaded</span>
+    <span class="sitem" id="sb-enc"></span>
+    <span class="sitem" id="sb-nodes"></span>
+    <span class="grow"></span>
+    <span class="sitem" id="sb-task"></span>
+    <span class="sitem"><span class="bar" id="sb-progress"><i style="width:0%"></i></span></span>
+    <button class="btn danger" id="sb-cancel" style="display:none;padding:1px 9px;font-size:11px">Cancel</button>
+    <span class="sitem" id="sb-pos"></span>
+  </footer>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="overlay"><div id="dialog" role="dialog" aria-modal="true"></div></div>
+<div id="ctxmenu" role="menu"></div>
+<input type="file" id="file-input" accept=".xml,text/xml,application/xml" hidden>
+<script>
+"use strict";
+/* ============================================================================
+ * JPK STUDIO — single-file XML Processing Studio for JPK_CIT (JPK_KR_PD)
+ * Pure vanilla JS. No dependencies. Fully offline. MVC-inspired modules.
+ * ========================================================================== */
+
+/* ---------------------------- tiny utilities ---------------------------- */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const el = (tag, attrs={}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k === 'html') n.innerHTML = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtBytes = b => {
+  if (b == null) return '—';
+  const u = ['B','KB','MB','GB']; let i = 0;
+  while (b >= 1024 && i < u.length-1) { b /= 1024; i++; }
+  return (i ? b.toFixed(b < 10 ? 2 : 1) : b) + ' ' + u[i];
+};
+const fmtInt = n => n == null ? '—' : n.toLocaleString('en-US');
+const now = () => new Date().toLocaleTimeString();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+const uid = () => Math.random().toString(36).slice(2, 9);
+const MB = 1024*1024;
+const MF_LIMIT = 100*MB;
+
+/* --------------------------------- Bus ---------------------------------- */
+const Bus = { m:new Map(),
+  on(e,f){ (this.m.get(e) ?? this.m.set(e,[]).get(e)).push(f); },
+  emit(e,...a){ (this.m.get(e)||[]).forEach(f=>f(...a)); } };
+
+/* --------------------------------- Log ---------------------------------- */
+const Log = {
+  lines: [],
+  add(msg, kind='info') {
+    this.lines.push({ t: now(), msg, kind });
+    if (this.lines.length > 2000) this.lines.shift();
+    const body = $('#logs-body');
+    const d = el('div', { class:'logline ' + kind });
+    d.append(el('span', { class:'lt' }, `[${now()}] `), msg);
+    body.append(d); body.scrollTop = body.scrollHeight;
+    $('#logs-count').textContent = this.lines.length + ' entries';
+  },
+  clear(){ this.lines=[]; $('#logs-body').innerHTML=''; $('#logs-count').textContent=''; }
+};
+
+/* -------------------------------- Toast --------------------------------- */
+const Toast = {
+  show(msg, kind='info', ms=3600) {
+    const t = el('div', { class:'toast '+kind, role:'status' },
+      el('span',{class:'tic'}), el('div',{},msg));
+    $('#toasts').append(t);
+    setTimeout(() => { t.classList.add('out'); setTimeout(()=>t.remove(), 260); }, ms);
+    Log.add(msg, kind === 'info' ? 'info' : kind);
+  }
+};
+
+/* -------------------------------- Dialog -------------------------------- */
+const Dialog = {
+  open({ title, body, buttons }) {
+    return new Promise(resolve => {
+      const dlg = $('#dialog'); dlg.innerHTML = '';
+      dlg.append(el('h2', {}, title));
+      const b = el('div', { class:'dbody' });
+      if (typeof body === 'string') b.innerHTML = body; else b.append(body);
+      dlg.append(b);
+      const foot = el('div', { class:'dfoot' });
+      (buttons || [{label:'OK', value:true, acc:true}]).forEach(btn => {
+        foot.append(el('button', { class:'btn'+(btn.acc?' acc':''), onclick(){ Dialog.close(); resolve(btn.value); } }, btn.label));
+      });
+      dlg.append(foot);
+      $('#overlay').classList.add('show');
+      const esc_ = e => { if (e.key==='Escape'){ Dialog.close(); resolve(null); document.removeEventListener('keydown',esc_);} };
+      document.addEventListener('keydown', esc_);
+      foot.querySelector('button')?.focus();
+    });
+  },
+  async prompt(title, label, value='') {
+    const inp = el('input', { type:'text', value, 'aria-label':label });
+    const wrap = el('div', {}, el('div',{},label), inp);
+    const p = this.open({ title, body:wrap, buttons:[
+      {label:'Cancel', value:null}, {label:'OK', value:'__ok', acc:true}] });
+    inp.focus(); inp.select();
+    const r = await p;
+    return r === '__ok' ? inp.value : null;
+  },
+  confirm(title, msg){ return this.open({title, body:msg, buttons:[
+    {label:'Cancel', value:false},{label:'Confirm', value:true, acc:true}]}); },
+  close(){ $('#overlay').classList.remove('show'); }
+};
+$('#overlay').addEventListener('mousedown', e => { if (e.target.id==='overlay') Dialog.close(); });
+
+/* ------------------------------ ContextMenu ----------------------------- */
+const Ctx = {
+  show(x, y, items) {
+    const m = $('#ctxmenu'); m.innerHTML = '';
+    items.forEach(it => {
+      if (it === '-') return m.append(el('hr'));
+      m.append(el('button', { role:'menuitem', onclick(){ Ctx.hide(); it.fn(); } },
+        el('span',{},it.label), it.k ? el('span',{class:'kbd'},it.k) : null));
+    });
+    m.style.display = 'block';
+    const r = m.getBoundingClientRect();
+    m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+    m.style.top  = Math.min(y, innerHeight - r.height - 8) + 'px';
+  },
+  hide(){ $('#ctxmenu').style.display='none'; }
+};
+document.addEventListener('mousedown', e => { if (!e.target.closest('#ctxmenu')) Ctx.hide(); });
+window.addEventListener('blur', () => Ctx.hide());
+
+/* --------------------------- Task (cancellable) ------------------------- */
+const Task = {
+  active:null,
+  start(name) {
+    const t = { name, cancelled:false, cancel(){ this.cancelled = true; } };
+    this.active = t;
+    $('#sb-task').textContent = name;
+    $('#sb-progress').classList.add('show');
+    $('#sb-cancel').style.display = 'inline-flex';
+    this.progress(0);
+    return t;
+  },
+  progress(p){ $('#sb-progress i').style.width = Math.round(p*100)+'%'; },
+  end() {
+    this.active = null;
+    $('#sb-task').textContent = '';
+    $('#sb-progress').classList.remove('show');
+    $('#sb-cancel').style.display = 'none';
+  }
+};
+$('#sb-cancel').onclick = () => { Task.active?.cancel(); Toast.show('Task cancelled','warn'); };
+
+/* ------------------------------- Settings ------------------------------- */
+const Settings = {
+  data: {
+    theme:'dark', splitTargetMB:95, splitCount:50000, recordTag:'',
+    domLimitMB:40, highlightLimitKB:1500, keepCtrl:true, autoPretty:false
+  },
+  load(){ try{ Object.assign(this.data, JSON.parse(localStorage.getItem('jpkstudio')||'{}')); }catch(_){} },
+  save(){ try{ localStorage.setItem('jpkstudio', JSON.stringify(this.data)); }catch(_){} }
+};
+
+/* -------------------------------- Store --------------------------------- */
+const Store = {
+  docs: new Map(),      // id -> Doc
+  activeId: null,
+  recents: [],
+  get active(){ return this.docs.get(this.activeId) || null; },
+  addRecent(name, size) {
+    this.recents = [{ name, size, t: Date.now() }, ...this.recents.filter(r=>r.name!==name)].slice(0,12);
+    try{ localStorage.setItem('jpkstudio-recent', JSON.stringify(this.recents)); }catch(_){}
+    UI.renderRecents();
+  },
+  loadRecents(){ try{ this.recents = JSON.parse(localStorage.getItem('jpkstudio-recent')||'[]'); }catch(_){ this.recents=[]; } }
+};
+
+/* Doc model:
+ * { id, name, size, file(Blob|null), text(string|null), doc(Document|null),
+ *   encoding, utf8ok, stats, issues, big:boolean } */
+function makeDoc(name, size) {
+  return { id: uid(), name, size, file:null, text:null, doc:null,
+           encoding:'—', utf8ok:null, stats:null, issues:null, big:false, dirty:false };
+}
+
+/* ============================================================================
+ * CRC32 + ZIP (stored) — manual implementation, no JSZip
+ * ========================================================================== */
+const CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32Update(crc, bytes) {
+  for (let i = 0; i < bytes.length; i++)
+    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return crc >>> 0;
+}
+async function crc32Blob(blob, task) {
+  let crc = 0xFFFFFFFF;
+  const CH = 4*MB;
+  for (let off = 0; off < blob.size; off += CH) {
+    if (task?.cancelled) throw new Error('cancelled');
+    const buf = new Uint8Array(await blob.slice(off, off+CH).arrayBuffer());
+    crc = crc32Update(crc, buf) ^ 0; // keep running (inverted at end)
+    crc = crc >>> 0;
+    // note: crc32Update expects pre-inverted running value
+    await nextFrame();
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+class ZipBuilder {           // ZIP with method 0 (stored) — valid, universal
+  constructor(){ this.entries = []; }
+  add(name, blob){ this.entries.push({ name, blob }); }
+  async build(task) {
+    const enc = new TextEncoder();
+    const chunks = []; const central = [];
+    let offset = 0;
+    const dt = (() => {                       // DOS date/time
+      const d = new Date();
+      const time = (d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+      const date = ((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+      return { time, date };
+    })();
+    const u16=(v)=>[v&255,(v>>8)&255], u32=(v)=>[v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255];
+    for (const e of this.entries) {
+      if (task?.cancelled) throw new Error('cancelled');
+      const nameB = enc.encode(e.name);
+      const crc = await crc32Blob(e.blob, task);
+      const size = e.blob.size;
+      const lfh = new Uint8Array([
+        0x50,0x4B,0x03,0x04, ...u16(20), ...u16(0x0800), ...u16(0),
+        ...u16(dt.time), ...u16(dt.date), ...u32(crc), ...u32(size), ...u32(size),
+        ...u16(nameB.length), ...u16(0)
+      ]);
+      chunks.push(lfh, nameB, e.blob);
+      central.push({ nameB, crc, size, offset });
+      offset += lfh.length + nameB.length + size;
+    }
+    const cdStart = offset; let cdSize = 0;
+    for (const c of central) {
+      const rec = new Uint8Array([
+        0x50,0x4B,0x01,0x02, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0),
+        ...u16(dt.time), ...u16(dt.date), ...u32(c.crc), ...u32(c.size), ...u32(c.size),
+        ...u16(c.nameB.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+        ...u32(0), ...u32(c.offset)
+      ]);
+      chunks.push(rec, c.nameB);
+      cdSize += rec.length + c.nameB.length;
+    }
+    chunks.push(new Uint8Array([
+      0x50,0x4B,0x05,0x06, ...u16(0), ...u16(0),
+      ...u16(central.length), ...u16(central.length),
+      ...u32(cdSize), ...u32(cdStart), ...u16(0)
+    ]));
+    return new Blob(chunks, { type:'application/zip' });
+  }
+}
+
+/* ============================================================================
+ * PDF — manual minimal generator (Helvetica, multi-page), no jsPDF
+ * ========================================================================== */
+function buildPdf(title, lines) {
+  const enc = new TextEncoder();
+  const escP = s => s.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)')
+                     .replace(/[^\x20-\x7E]/g, '?');
+  const perPage = 52, pages = [];
+  for (let i = 0; i < Math.max(1, Math.ceil(lines.length/perPage)); i++)
+    pages.push(lines.slice(i*perPage, (i+1)*perPage));
+  const objs = [];                                     // 1-indexed bodies
+  const pageIds = pages.map((_,i)=> 4 + i*2);
+  objs[1] = `<< /Type /Catalog /Pages 2 0 R >>`;
+  objs[2] = `<< /Type /Pages /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] /Count ${pages.length} >>`;
+  objs[3] = `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`;
+  pages.forEach((pl, i) => {
+    let y = 800, body = `BT /F1 14 Tf 46 ${y} Td (${escP(title)}${pages.length>1?` — page ${i+1}/${pages.length}`:''}) Tj ET\n`;
+    y -= 26;
+    for (const ln of pl) {
+      body += `BT /F1 9 Tf 46 ${y} Td (${escP(ln).slice(0,110)}) Tj ET\n`;
+      y -= 13.5;
+    }
+    objs[pageIds[i]] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageIds[i]+1} 0 R >>`;
+    objs[pageIds[i]+1] = `<< /Length ${enc.encode(body).length} >>\nstream\n${body}endstream`;
+  });
+  let pdf = '%PDF-1.4\n'; const xref = [0];
+  for (let i = 1; i < objs.length; i++) {
+    xref[i] = enc.encode(pdf).length;
+    pdf += `${i} 0 obj\n${objs[i]}\nendobj\n`;
+  }
+  const xs = enc.encode(pdf).length;
+  pdf += `xref\n0 ${objs.length}\n0000000000 65535 f \n`;
+  for (let i = 1; i < objs.length; i++) pdf += String(xref[i]).padStart(10,'0') + ' 00000 n \n';
+  pdf += `trailer\n<< /Size ${objs.length} /Root 1 0 R >>\nstartxref\n${xs}\n%%EOF`;
+  return new Blob([pdf], { type:'application/pdf' });
+}
+
+/* ============================================================================
+ * XML utilities — encoding, validation, pretty print, highlight, JSON, CSV
+ * ========================================================================== */
+const Xml = {
+  detectEncoding(bytes) {                    // BOM + declaration sniffing
+    if (bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) return 'UTF-8 (BOM)';
+    if (bytes[0]===0xFF && bytes[1]===0xFE) return 'UTF-16 LE (BOM)';
+    if (bytes[0]===0xFE && bytes[1]===0xFF) return 'UTF-16 BE (BOM)';
+    const head = new TextDecoder('latin1').decode(bytes.slice(0, 200));
+    const m = head.match(/encoding\s*=\s*["']([\w-]+)["']/i);
+    return m ? m[1].toUpperCase() + ' (declared)' : 'UTF-8 (assumed)';
+  },
+  validateUtf8(bytes) {                      // strict UTF-8 scanner
+    let i = 0; const n = bytes.length;
+    while (i < n) {
+      const b = bytes[i];
+      if (b < 0x80) { i++; continue; }
+      let need, min;
+      if ((b & 0xE0) === 0xC0) { need = 1; min = 0x80; }
+      else if ((b & 0xF0) === 0xE0) { need = 2; min = 0x800; }
+      else if ((b & 0xF8) === 0xF0) { need = 3; min = 0x10000; }
+      else return { ok:false, at:i };
+      if (i + need > n - 1) return { ok:false, at:i };
+      let cp = b & (0x3F >> need);
+      for (let k = 1; k <= need; k++) {
+        const c = bytes[i+k];
+        if ((c & 0xC0) !== 0x80) return { ok:false, at:i+k };
+        cp = (cp << 6) | (c & 0x3F);
+      }
+      if (cp < min || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return { ok:false, at:i };
+      i += need + 1;
+    }
+    return { ok:true };
+  },
+  /* Full-file UTF-8 validation in chunks — boundary-safe (incomplete tail
+   * sequences are carried into the next chunk), works for any size. */
+  async validateUtf8Stream(file, task, p0 = 0, p1 = 0.25) {
+    const CH = 16*MB;
+    let carry = new Uint8Array(0), pos = 0;
+    while (pos < file.size) {
+      if (task?.cancelled) throw new Error('cancelled');
+      const buf = new Uint8Array(await file.slice(pos, pos + CH).arrayBuffer());
+      pos += CH;
+      let chunk;
+      if (carry.length) { chunk = new Uint8Array(carry.length + buf.length); chunk.set(carry); chunk.set(buf, carry.length); }
+      else chunk = buf;
+      /* trim a possibly incomplete multibyte sequence from the end */
+      let end = chunk.length;
+      if (pos < file.size) {
+        let back = 0;
+        while (back < 3 && end > 0 && (chunk[end-1] & 0xC0) === 0x80) { end--; back++; }
+        if (end > 0 && (chunk[end-1] & 0xC0) === 0xC0) {
+          const b = chunk[end-1];
+          const need = b >= 0xF0 ? 3 : b >= 0xE0 ? 2 : 1;      // continuation bytes required
+          if (back >= need) end += back;                        // sequence was complete — restore
+          else end--;                                           // incomplete lead — carry it too
+        } else end += back;                                     // no lead before them — let validator judge
+      }
+      const r = this.validateUtf8(chunk.subarray(0, end));
+      if (!r.ok) return { ok:false, at: r.at };
+      carry = chunk.slice(end);
+      if (carry.length > 3) return { ok:false, at: pos - CH };
+      if (task) { Task.progress(p0 + Math.min(pos, file.size)/file.size * (p1-p0)); await nextFrame(); }
+    }
+    if (carry.length) { const r = this.validateUtf8(carry); if (!r.ok) return { ok:false, at:file.size - carry.length }; }
+    return { ok:true };
+  },
+
+  /* Streaming structure scan — a chunked XML tokenizer that never builds a DOM.
+   * Verifies well-formedness (tag balance, terminated comments/CDATA/PIs) with
+   * line numbers, and collects statistics: element/attribute counts, name
+   * frequencies, depth-1/depth-2 child maps, parent>child pairs, namespaces.
+   * This is what makes 150 MB+ files first-class citizens. */
+  async scanStream(file, task, p0 = 0.25, p1 = 0.6) {
+    const dec = new TextDecoder('utf-8'), CH = 4*MB;
+    let buf = '', pos = 0, eof = false, line = 1;
+    const more = async () => {
+      if (pos >= file.size) { eof = true; return false; }
+      const ab = await file.slice(pos, pos + CH).arrayBuffer();
+      pos += CH;
+      buf += dec.decode(ab, { stream: pos < file.size });
+      if (task) { Task.progress(p0 + Math.min(pos, file.size)/file.size * (p1-p0)); await nextFrame(); }
+      return true;
+    };
+    const nl = s => { let n = 0, i = -1; while ((i = s.indexOf('\n', i+1)) !== -1) n++; return n; };
+    const stack = [];
+    const names = new Map(), depth1 = new Map(), depth2 = new Map(),
+          pairs = new Map(), namespaces = new Map();
+    let elements = 0, attributes = 0, comments = 0, cdata = 0, pis = 0,
+        textRuns = 0, textBytes = 0, maxDepth = 0, rootName = null;
+    const bump = (m, k) => m.set(k, (m.get(k)||0) + 1);
+    const fail = msg => ({ ok:false, error: msg, line,
+      rootName, stats: this._scanStats(elements, attributes, comments, cdata, pis, textRuns, textBytes, maxDepth, names, depth1, depth2, pairs, namespaces) });
+
+    for (;;) {
+      if (task?.cancelled) throw new Error('cancelled');
+      if (!buf) { if (!(await more())) break; continue; }
+      const lt = buf.indexOf('<');
+      if (lt === -1) { if (buf.trim()) { textRuns++; textBytes += buf.length; } line += nl(buf); buf = ''; continue; }
+      if (lt) { const t = buf.slice(0, lt); if (t.trim()) { textRuns++; textBytes += t.length; } line += nl(t); buf = buf.slice(lt); }
+      while (buf.length < 12 && !eof) if (!(await more())) break;
+
+      if (buf.startsWith('<!--')) {
+        let e; while ((e = buf.indexOf('-->', 4)) === -1) if (!(await more())) return fail('Unterminated comment (<!-- without -->)');
+        comments++; line += nl(buf.slice(0, e+3)); buf = buf.slice(e+3); continue;
+      }
+      if (buf.startsWith('<![CDATA[')) {
+        let e; while ((e = buf.indexOf(']]>', 9)) === -1) if (!(await more())) return fail('Unterminated CDATA section');
+        cdata++; line += nl(buf.slice(0, e+3)); buf = buf.slice(e+3); continue;
+      }
+      if (buf.startsWith('<?')) {
+        let e; while ((e = buf.indexOf('?>', 2)) === -1) if (!(await more())) return fail('Unterminated processing instruction');
+        if (!/^<\?xml[\s?]/i.test(buf.slice(0, 6) + ' ')) pis++;
+        line += nl(buf.slice(0, e+2)); buf = buf.slice(e+2); continue;
+      }
+      if (buf.startsWith('<!')) {                     /* DOCTYPE (internal subset aware) */
+        let from = 2, inSubset = false, e = -1;
+        for (;;) {
+          const gt = buf.indexOf('>', from), br = buf.indexOf(inSubset ? ']' : '[', from);
+          if (!inSubset && gt !== -1 && (br === -1 || gt < br)) { e = gt; break; }
+          if (br !== -1) { inSubset = !inSubset; from = br + 1; continue; }
+          if (!(await more())) return fail('Unterminated <!DOCTYPE> declaration');
+        }
+        line += nl(buf.slice(0, e+1)); buf = buf.slice(e+1); continue;
+      }
+
+      /* element tag — find '>' outside quoted attribute values */
+      let i = 1, q = 0, e = -1;
+      for (;;) {
+        for (; i < buf.length; i++) {
+          const c = buf.charCodeAt(i);
+          if (q) { if (c === q) q = 0; }
+          else if (c === 34 || c === 39) q = c;
+          else if (c === 62) { e = i; break; }
+          else if (c === 60) return fail("Unexpected '<' inside a tag — missing '>'?");
+        }
+        if (e !== -1) break;
+        if (!(await more())) return fail('Unterminated tag (missing ">")');
+      }
+      const tag = buf.slice(0, e + 1);
+      line += nl(tag); buf = buf.slice(e + 1);
+
+      if (tag.charCodeAt(1) === 47) {                 /* closing tag */
+        const name = tag.slice(2, -1).trim();
+        const top = stack.pop();
+        if (top === undefined) return fail(`Closing </${name}> has no matching open tag`);
+        if (top !== name) return fail(`Mismatched tags: <${top}> is closed by </${name}>`);
+        continue;
+      }
+      const m = /^<([^\s/>]+)/.exec(tag);
+      if (!m) return fail('Malformed tag: ' + tag.slice(0, 40));
+      const name = m[1];
+      elements++; bump(names, name);
+      if (stack.length === 0) { if (!rootName) rootName = name; }
+      else if (stack.length === 1) { bump(depth1, name); bump(pairs, stack[0] + '>' + name); }
+      else if (stack.length === 2) { bump(depth2, name); bump(pairs, stack[1] + '>' + name); }
+      let ac = 0, qq = 0;
+      for (let k = 0; k < tag.length; k++) {
+        const c = tag.charCodeAt(k);
+        if (qq) { if (c === qq) qq = 0; }
+        else if (c === 34 || c === 39) qq = c;
+        else if (c === 61) ac++;
+      }
+      attributes += ac;
+      if (ac && tag.includes('xmlns')) {
+        const rx = /\sxmlns(?::[^\s=]+)?\s*=\s*(?:"([^"]*)"|'([^']*)')/g; let mm;
+        while ((mm = rx.exec(tag))) bump(namespaces, mm[1] ?? mm[2]);
+      }
+      if (!/\/\s*>$/.test(tag)) {
+        stack.push(name);
+        if (stack.length > maxDepth) maxDepth = stack.length;
+      } else if (stack.length + 1 > maxDepth) maxDepth = stack.length + 1;
+    }
+    if (stack.length) return fail(`Unclosed <${stack[stack.length-1]}> at end of file`);
+    if (!rootName) return fail('No root element found');
+    return { ok:true, error:null, line:null, rootName,
+      stats: this._scanStats(elements, attributes, comments, cdata, pis, textRuns, textBytes, maxDepth, names, depth1, depth2, pairs, namespaces) };
+  },
+  _scanStats(elements, attributes, comments, cdata, pis, textRuns, textBytes, maxDepth, names, depth1, depth2, pairs, namespaces) {
+    return { elements, attributes, comments, cdata, pis, textRuns, textBytes, maxDepth, names, depth1, depth2, pairs, namespaces };
+  },
+
+  parse(text) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const err = doc.querySelector('parsererror');
+    if (err) {
+      const msg = err.textContent.replace(/\s+/g,' ').trim();
+      const lm = msg.match(/line[:\s]+(\d+)/i);
+      return { doc:null, error: msg.slice(0, 300), line: lm ? +lm[1] : null };
+    }
+    return { doc, error:null };
+  },
+  async prettyPrint(text, task) {            // token-based, chunked, async
+    const out = []; let indent = 0, i = 0, count = 0;
+    const push = s => out.push('  '.repeat(Math.max(0,indent)) + s);
+    const N = text.length;
+    while (i < N) {
+      if (task?.cancelled) throw new Error('cancelled');
+      const lt = text.indexOf('<', i);
+      if (lt === -1) { const t = text.slice(i).trim(); if (t) push(t); break; }
+      const t = text.slice(i, lt).trim();
+      if (t) push(t);
+      let gt;
+      if (text.startsWith('<!--', lt)) gt = text.indexOf('-->', lt) + 2;
+      else if (text.startsWith('<![CDATA[', lt)) gt = text.indexOf(']]>', lt) + 2;
+      else gt = text.indexOf('>', lt);
+      if (gt < lt) { push(text.slice(lt)); break; }
+      const tag = text.slice(lt, gt+1);
+      if (tag.startsWith('</')) { indent--; push(tag); }
+      else if (tag.startsWith('<?') || tag.startsWith('<!')) push(tag);
+      else if (tag.endsWith('/>')) push(tag);
+      else {                                    // maybe inline: <a>text</a>
+        const close = text.indexOf('<', gt+1);
+        const inner = close > -1 ? text.slice(gt+1, close) : '';
+        if (close > -1 && text.startsWith('</', close) && !inner.includes('\n') && inner.length < 90) {
+          const cgt = text.indexOf('>', close);
+          push(text.slice(lt, cgt+1)); i = cgt + 1;
+          if (++count % 4000 === 0) { Task.progress(i/N); await nextFrame(); }
+          continue;
+        }
+        push(tag); indent++;
+      }
+      i = gt + 1;
+      if (++count % 4000 === 0) { Task.progress(i/N); await nextFrame(); }
+    }
+    return out.join('\n');
+  },
+  highlight(text) {                          // XML syntax highlighting (regex tokens)
+    return esc(text)
+      .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="t-com">$1</span>')
+      .replace(/(&lt;!\[CDATA\[[\s\S]*?\]\]&gt;)/g, '<span class="t-cd">$1</span>')
+      .replace(/(&lt;\?[\s\S]*?\?&gt;)/g, '<span class="t-pi">$1</span>')
+      .replace(/(&lt;\/?)([\w:.-]+)((?:[^&]|&(?!gt;))*?)(\/?&gt;)/g, (m, o, name, attrs, c) => {
+        const a = attrs.replace(/([\w:.-]+)(=)(&quot;.*?&quot;|'.*?')/g,
+          '<span class="t-attr">$1</span>$2<span class="t-val">$3</span>');
+        return `${o}<span class="t-tag">${name}</span>${a}${c}`;
+      });
+  },
+  xmlToJson(node) {
+    if (node.nodeType === 9) return { [node.documentElement.nodeName]: this.xmlToJson(node.documentElement) };
+    const o = {};
+    for (const a of node.attributes || []) o['@'+a.name] = a.value;
+    let text = '';
+    for (const c of node.childNodes) {
+      if (c.nodeType === 3 || c.nodeType === 4) text += c.nodeValue;
+      else if (c.nodeType === 1) {
+        const v = this.xmlToJson(c), k = c.nodeName;
+        if (k in o) { if (!Array.isArray(o[k])) o[k] = [o[k]]; o[k].push(v); }
+        else o[k] = v;
+      }
+    }
+    text = text.trim();
+    if (text) { if (Object.keys(o).length === 0) return text; o['#text'] = text; }
+    return o;
+  },
+  toCsv(doc, recordTag) {
+    const recs = [...doc.getElementsByTagName(recordTag)];
+    if (!recs.length) return null;
+    const cols = new Set();
+    for (const r of recs.slice(0, 3000)) {
+      for (const a of r.attributes) cols.add('@'+a.name);
+      for (const c of r.children) cols.add(c.nodeName);
+    }
+    const head = [...cols];
+    const q = v => { v = String(v ?? ''); return /[",\n;]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+    const rows = [head.map(q).join(',')];
+    for (const r of recs) {
+      rows.push(head.map(h => {
+        if (h.startsWith('@')) return q(r.getAttribute(h.slice(1)));
+        const c = [...r.children].find(x => x.nodeName === h);
+        return q(c ? c.textContent : '');
+      }).join(','));
+    }
+    return rows.join('\r\n');
+  }
+};
+
+/* ============================================================================
+ * Analyzer — async DOM statistics
+ * ========================================================================== */
+const Analyzer = {
+  async run(doc, task) {
+    const st = {
+      nodes:0, elements:0, attributes:0, textNodes:0, comments:0, cdata:0, pis:0,
+      maxDepth:0, namespaces:new Map(), names:new Map(), branches:[], textBytes:0
+    };
+    const walker = doc.createTreeWalker(doc, 0xFFFFFFFF);
+    let n, i = 0;
+    const depthOf = node => { let d=0; while ((node=node.parentNode) && node.nodeType!==9) d++; return d; };
+    while ((n = walker.nextNode())) {
+      if (task?.cancelled) throw new Error('cancelled');
+      st.nodes++;
+      switch (n.nodeType) {
+        case 1: {
+          st.elements++; st.attributes += n.attributes.length;
+          st.names.set(n.nodeName, (st.names.get(n.nodeName)||0)+1);
+          if (n.namespaceURI) st.namespaces.set(n.namespaceURI, (st.namespaces.get(n.namespaceURI)||0)+1);
+          const d = depthOf(n); if (d > st.maxDepth) st.maxDepth = d;
+          break;
+        }
+        case 3: st.textNodes++; st.textBytes += n.nodeValue.length; break;
+        case 4: st.cdata++; st.textBytes += n.nodeValue.length; break;
+        case 7: st.pis++; break;
+        case 8: st.comments++; break;
+      }
+      if (++i % 15000 === 0) { Task.progress(Math.min(.95, i/600000)); await nextFrame(); }
+    }
+    // largest branches: direct children of root by descendant element count
+    const root = doc.documentElement;
+    for (const c of root.children) {
+      st.branches.push({ name:c.nodeName, count: c.getElementsByTagName('*').length + 1 });
+    }
+    st.branches.sort((a,b)=>b.count-a.count);
+    // aggregate repeated names of same tag among root children
+    const agg = new Map();
+    for (const b of st.branches) {
+      const a = agg.get(b.name) || { name:b.name, count:0, times:0 };
+      a.count += b.count; a.times++; agg.set(b.name, a);
+    }
+    st.rootGroups = [...agg.values()].sort((a,b)=>b.count-a.count);
+    st.repeated = [...st.names.entries()].filter(([,c])=>c>1).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    st.memoryEstimate = st.nodes*96 + st.textBytes*2 + st.attributes*64;   // rough DOM cost
+    st.complexity = Math.round(Math.log2(1+st.elements) * (1 + st.maxDepth/8) * (1 + st.names.size/60) * 10) / 10;
+    return st;
+  }
+};
+
+/* ============================================================================
+ * Validator — technical + JPK_KR_PD business rules
+ * ========================================================================== */
+const Validator = {
+  nipValid(nip) {
+    nip = String(nip||'').replace(/[\s-]/g,'');
+    if (!/^\d{10}$/.test(nip)) return false;
+    const w = [6,5,7,2,3,4,5,6,7];
+    const sum = w.reduce((s,x,i)=> s + x*+nip[i], 0);
+    return sum % 11 === +nip[9];
+  },
+  async run(d, task) {
+    const issues = [];
+    const add = (sev, title, detail) => issues.push({ sev, title, detail });
+
+    /* --- technical layer --- */
+    if (d.encoding && !/utf-?8/i.test(d.encoding))
+      add('warn', 'Non-UTF-8 encoding declared', `Detected: ${d.encoding}. The MF gateway expects UTF-8; Polish characters may be corrupted.`);
+    if (d.utf8ok === false)
+      add('err', 'Invalid UTF-8 byte sequence', 'The file contains bytes that are not valid UTF-8. Fix the export encoding in your ERP.');
+    else if (d.utf8ok === true)
+      add('ok', 'UTF-8 validation passed', 'All byte sequences are valid UTF-8.');
+
+    if (d.size > MF_LIMIT)
+      add('err', 'File exceeds the 100 MB MF gateway limit',
+        `${fmtBytes(d.size)} — the Ministry of Finance gateway will reject it. Use the Split module to divide JPK_KR_PD into compliant parts.`);
+    else
+      add('ok', 'Within the 100 MB gateway limit', `${fmtBytes(d.size)} of 100 MB (${(d.size/MF_LIMIT*100).toFixed(1)}%).`);
+
+    if (!d.doc) {
+      if (d.big) { await this.runStream(d, task, issues, add); d.issues = issues; return issues; }
+      add('err','Not well-formed XML', d.parseError || 'Parser error.');
+      d.issues = issues; return issues;
+    }
+    add('ok', 'Well-formed XML', 'Document parses without structural errors.');
+
+    const doc = d.doc, root = doc.documentElement;
+    if (!root.namespaceURI)
+      add('warn', 'Missing default namespace on root', `<${root.nodeName}> declares no xmlns. JPK structures published by MF are namespace-qualified.`);
+    else if (/crd\.gov\.pl/.test(root.namespaceURI))
+      add('ok', 'MF namespace detected', root.namespaceURI);
+    else
+      add('info', 'Root namespace', root.namespaceURI);
+
+    const get = tag => root.getElementsByTagName(tag);
+    const txt = tag => get(tag)[0]?.textContent?.trim();
+
+    /* --- JPK_KR_PD business layer --- */
+    const isJpk = /^JPK/i.test(root.nodeName) || get('Naglowek').length;
+    if (isJpk) {
+      const kod = txt('KodFormularza');
+      if (kod) add(kod.includes('JPK_KR') ? 'ok' : 'info', 'Form code', `KodFormularza = ${kod}`);
+      for (const req of ['Naglowek','Podmiot1'])
+        if (!get(req).length) add('err', `Missing required <${req}>`, `Schema JPK_KR_PD requires the ${req} section.`);
+      const from = txt('DataOd'), to = txt('DataDo');
+      if (from && to && from > to) add('err', 'Reporting period reversed', `DataOd (${from}) is after DataDo (${to}).`);
+      else if (from && to) add('ok', 'Reporting period', `${from} → ${to}`);
+
+      const nips = [...get('NIP')];
+      let badNip = 0;
+      for (const n of nips.slice(0, 20000)) if (!this.nipValid(n.textContent)) badNip++;
+      if (nips.length) {
+        if (badNip) add('err', `Invalid NIP checksum (${badNip}×)`, 'One or more NIP values fail the Polish checksum (weights 6-5-7-2-3-4-5-6-7). Foreign counterparties should use NrIdKontrahenta instead.');
+        else add('ok', 'NIP checksums valid', `${nips.length} NIP value(s) verified.`);
+      }
+
+      // journal entries
+      const recs = [...get('Dziennik')];
+      if (recs.length) {
+        add('info', 'Journal entries found', `${fmtInt(recs.length)} <Dziennik> record(s).`);
+        const seen = new Set(); let dups = 0, dateOut = 0, missing = 0;
+        let sumW = 0, sumM = 0;
+        for (let i = 0; i < recs.length; i++) {
+          if (task?.cancelled) throw new Error('cancelled');
+          const r = recs[i];
+          const nr = r.getElementsByTagName('NrZapisu')[0]?.textContent?.trim();
+          if (nr) { if (seen.has(nr)) dups++; seen.add(nr); } else missing++;
+          const dt = r.getElementsByTagName('DataOperacji')[0]?.textContent?.trim();
+          if (dt && from && to && (dt < from || dt > to)) dateOut++;
+          sumW += parseFloat(r.getElementsByTagName('KwotaWinien')[0]?.textContent) || 0;
+          sumM += parseFloat(r.getElementsByTagName('KwotaMa')[0]?.textContent) || 0;
+          if (i % 8000 === 0) { Task.progress(i/recs.length); await nextFrame(); }
+        }
+        if (dups) add('err', `Duplicate NrZapisu (${dups}×)`, 'Journal entry numbers must be unique within the file.');
+        else add('ok', 'No duplicate entry numbers', 'NrZapisu values are unique.');
+        if (missing) add('err', `Missing NrZapisu (${missing}×)`, 'Every journal record requires an entry number.');
+        if (dateOut) add('warn', `Operations outside period (${dateOut}×)`, 'DataOperacji falls outside DataOd–DataDo.');
+        const diff = Math.abs(sumW - sumM);
+        if (diff > 0.005) add('err', 'Journal not balanced', `Σ KwotaWinien = ${sumW.toFixed(2)}, Σ KwotaMa = ${sumM.toFixed(2)} (diff ${diff.toFixed(2)}). Debits must equal credits.`);
+        else add('ok', 'Journal balanced', `Debits equal credits (${sumW.toFixed(2)}).`);
+
+        const ctrl = get('DziennikCtrl')[0];
+        if (ctrl) {
+          const declared = parseInt(ctrl.getElementsByTagName('LiczbaWierszyDziennika')[0]?.textContent);
+          if (declared && declared !== recs.length)
+            add('err', 'Control record mismatch', `DziennikCtrl declares ${fmtInt(declared)} rows but the file contains ${fmtInt(recs.length)}. Re-generate control sums (they must be recomputed after splitting).`);
+          else if (declared) add('ok', 'Control record consistent', `LiczbaWierszyDziennika = ${fmtInt(declared)}.`);
+        } else add('warn', 'No <DziennikCtrl> control record', 'JPK_KR_PD includes control counts/sums; verify against the current XSD.');
+      }
+      // empty required-ish values
+      let empty = 0;
+      const w = doc.createTreeWalker(root, 1);
+      let node2, scanned = 0;
+      while ((node2 = w.nextNode()) && scanned < 300000) {
+        scanned++;
+        if (!node2.children.length && !node2.textContent.trim() && !node2.attributes.length) empty++;
+      }
+      if (empty) add('warn', `Empty elements (${empty}×)`, 'Elements without text, children or attributes — verify none of them is schema-required.');
+    } else {
+      add('info', 'Generic XML mode', 'No JPK header detected — business rules for JPK_KR_PD were skipped; technical checks apply.');
+    }
+    d.issues = issues;
+    return issues;
+  },
+
+  /* Business validation without a DOM — streaming record walk for 100 MB+
+   * files. Envelope sections (Naglowek, Podmiot1, *Ctrl) are individually
+   * small and are parsed with DOMParser; journal fields are extracted from
+   * each record with regexes while the file streams through in chunks. */
+  async runStream(d, task, issues, add) {
+    const src = d.file || new Blob([d.text || '']);
+    if (!d.scan) { try { d.scan = await Xml.scanStream(src, task, 0, 0.35); } catch(e) { add('err','Structure scan failed', e.message); return; } }
+    if (!d.scan.ok) {
+      add('err', 'Not well-formed XML',
+        `${d.scan.error}${d.scan.line ? ` (around line ${fmtInt(d.scan.line)})` : ''} — detected by the streaming scanner without loading the file into memory.`);
+      return;
+    }
+    add('ok', 'Well-formed XML', `Verified by streaming scan — ${fmtInt(d.scan.stats.elements)} elements, tag balance intact.`);
+    const nsList = [...d.scan.stats.namespaces.keys()];
+    if (!nsList.length) add('warn', 'Missing default namespace on root', `<${d.scan.rootName}> declares no xmlns. JPK structures published by MF are namespace-qualified.`);
+    else if (nsList.some(n => /crd\.gov\.pl/.test(n))) add('ok', 'MF namespace detected', nsList.find(n => /crd\.gov\.pl/.test(n)));
+    else add('info', 'Root namespace', nsList[0]);
+
+    const plan = Splitter.planFromScan(d.scan, null);
+    const isJpk = /^JPK/i.test(d.scan.rootName || '') || d.scan.stats.depth1.has('Naglowek');
+    if (!isJpk) { add('info', 'Generic XML mode', 'No JPK header detected — business rules for JPK_KR_PD were skipped; technical checks apply.'); return; }
+
+    const grab = (txt, tag) => { const m = new RegExp(`<${tag}[^>]*>\\s*([^<]*)`).exec(txt); return m ? m[1].trim() : null; };
+    let from = null, to = null, headerDone = false;
+    const seen = new Set(); let dups = 0, missing = 0, dateOut = 0, badNip = 0, nipCount = 0, nipCapped = false;
+    const per = new Map();                                /* section → {n, w, m} */
+    const ctrls = [];                                     /* {name, declared, sumW, sumM} */
+    const journalName = n => /Dziennik/i.test(n);
+
+    await Splitter.streamUnits(src, plan, task, u => {
+      if (u.name === null) {
+        const t = u.text;
+        if (!headerDone && /<Naglowek[\s>]/.test(t)) {
+          headerDone = true;
+          const kod = grab(t, 'KodFormularza');
+          if (kod) add(kod.includes('JPK_KR') ? 'ok' : 'info', 'Form code', `KodFormularza = ${kod}`);
+          from = grab(t, 'DataOd'); to = grab(t, 'DataDo');
+          if (from && to && from > to) add('err', 'Reporting period reversed', `DataOd (${from}) is after DataDo (${to}).`);
+          else if (from && to) add('ok', 'Reporting period', `${from} → ${to}`);
+        }
+        if (/<Podmiot1[\s>]/.test(t)) {
+          const nip = grab(t, 'NIP');
+          if (nip) { nipCount++; if (!Validator.nipValid(nip)) { badNip++; add('err', 'Invalid NIP in Podmiot1', `NIP ${nip} fails the Polish checksum (weights 6-5-7-2-3-4-5-6-7).`); } }
+        }
+        const cm = /^<([A-Za-z][\w.-]*)Ctrl[\s>]/.exec(t);
+        if (cm) ctrls.push({ name: cm[1],
+          declared: parseInt(grab(t, 'LiczbaWierszy[A-Za-z]*')) || null,
+          sumW: parseFloat(grab(t, 'Suma[A-Za-z]*Winien')) , sumM: parseFloat(grab(t, 'Suma[A-Za-z]*Ma')) });
+        return;
+      }
+      const agg = per.get(u.name) || { n:0, w:0, m:0 };
+      agg.n++;
+      let mt; const rw = /<Kwota[A-Za-z]*Winien[^>]*>\s*([-\d.,]+)/g, rm = /<Kwota[A-Za-z]*Ma[^>]*>\s*([-\d.,]+)/g;
+      while ((mt = rw.exec(u.text))) agg.w += parseFloat(mt[1].replace(',', '.')) || 0;
+      while ((mt = rm.exec(u.text))) agg.m += parseFloat(mt[1].replace(',', '.')) || 0;
+      per.set(u.name, agg);
+      if (journalName(u.name)) {
+        const nr = grab(u.text, 'NrZapisu');
+        if (nr) { if (seen.has(nr)) dups++; seen.add(nr); } else missing++;
+        const dt = grab(u.text, 'DataOperacji');
+        if (dt && from && to && (dt < from || dt > to)) dateOut++;
+      }
+      if (nipCount < 20000) {
+        let nm; const rx = /<NIP>\s*([\d\s-]{10,13})\s*<\/NIP>/g;
+        while ((nm = rx.exec(u.text))) { nipCount++; if (!Validator.nipValid(nm[1])) badNip++; }
+      } else nipCapped = true;
+    }, 0.35, 0.95);
+
+    for (const [name, agg] of per) add('info', `Section <${name}>`, `${fmtInt(agg.n)} record(s)` + (agg.w || agg.m ? ` — Σ Winien ${agg.w.toFixed(2)}, Σ Ma ${agg.m.toFixed(2)}` : '') + '.');
+    const j = [...per.entries()].find(([n]) => journalName(n));
+    if (j) {
+      const [, agg] = j;
+      if (dups) add('err', `Duplicate NrZapisu (${fmtInt(dups)}×)`, 'Journal entry numbers must be unique within the file.');
+      else add('ok', 'No duplicate entry numbers', 'NrZapisu values are unique.');
+      if (missing) add('err', `Missing NrZapisu (${fmtInt(missing)}×)`, 'Every journal record requires an entry number.');
+      if (dateOut) add('warn', `Operations outside period (${fmtInt(dateOut)}×)`, 'DataOperacji falls outside DataOd–DataDo.');
+      const diff = Math.abs(agg.w - agg.m);
+      if (diff > 0.005) add('err', 'Journal not balanced', `Σ KwotaWinien = ${agg.w.toFixed(2)}, Σ KwotaMa = ${agg.m.toFixed(2)} (diff ${diff.toFixed(2)}). Debits must equal credits.`);
+      else add('ok', 'Journal balanced', `Debits equal credits (${agg.w.toFixed(2)}).`);
+    }
+    if (badNip) add('err', `Invalid NIP checksum (${fmtInt(badNip)}×)`, 'One or more NIP values fail the Polish checksum. Foreign counterparties should use NrIdKontrahenta instead.');
+    else if (nipCount) add('ok', 'NIP checksums valid', `${fmtInt(nipCount)} NIP value(s) verified${nipCapped ? ' (capped at 20 000)' : ''}.`);
+    for (const c of ctrls) {
+      const base = per.get(c.name) || per.get(c.name + 'Wiersz') || [...per.entries()].find(([n]) => n.replace(/Wiersz$/, '') === c.name)?.[1];
+      if (!base || c.declared == null) { if (c.declared != null) add('info', `<${c.name}Ctrl>`, `Declares ${fmtInt(c.declared)} rows.`); continue; }
+      if (c.declared !== base.n)
+        add('err', `Control record mismatch (<${c.name}Ctrl>)`, `Declares ${fmtInt(c.declared)} rows but the file contains ${fmtInt(base.n)}. Control sums must be recomputed after splitting.`);
+      else add('ok', `Control record consistent (<${c.name}Ctrl>)`, `LiczbaWierszy = ${fmtInt(c.declared)}.`);
+      if (Number.isFinite(c.sumW) && Math.abs(c.sumW - base.w) > 0.01)
+        add('err', `Control sum mismatch (<${c.name}Ctrl>)`, `Declared Σ Winien ${c.sumW.toFixed(2)} ≠ computed ${base.w.toFixed(2)}.`);
+      if (Number.isFinite(c.sumM) && Math.abs(c.sumM - base.m) > 0.01)
+        add('err', `Control sum mismatch (<${c.name}Ctrl>)`, `Declared Σ Ma ${c.sumM.toFixed(2)} ≠ computed ${base.m.toFixed(2)}.`);
+    }
+    if (!ctrls.length) add('warn', 'No control record found', 'JPK_KR_PD includes control counts/sums (<…Ctrl>); verify against the current XSD.');
+  }
+};
+</script>
+<script>
+"use strict";
+/* ============================================================================
+ * Splitter — DOM mode (small/medium) + streaming mode (hundreds of MB)
+ * ========================================================================== */
+const Splitter = {
+  detectRecordTag(d) {
+    if (Settings.data.recordTag) return Settings.data.recordTag;
+    if (d.doc) {
+      const freq = new Map();
+      for (const c of d.doc.documentElement.children)
+        freq.set(c.nodeName, (freq.get(c.nodeName)||0)+1);
+      let best = null, bestN = 1;
+      for (const [k,v] of freq) if (v > bestN) { best = k; bestN = v; }
+      return best || 'Dziennik';
+    }
+    if (d.scan?.ok) {
+      const plan = this.planFromScan(d.scan, null);
+      const best = [...plan.names].sort((a, b) =>
+        ((d.scan.stats.depth1.get(b) || d.scan.stats.depth2.get(b) || 0) -
+         (d.scan.stats.depth1.get(a) || d.scan.stats.depth2.get(a) || 0)))[0];
+      if (best) return best;
+    }
+    return 'Dziennik';
+  },
+
+  /* -------- DOM splitting (rebuilds envelope + recomputes Ctrl) -------- */
+  async splitDom(d, opts, task) {
+    const { mode, maxBytes, maxCount, tag } = opts;
+    const doc = d.doc, root = doc.documentElement;
+    const kids = [...root.children];
+    const recIdx = kids.map((k,i)=>({k,i})).filter(x=>x.k.nodeName===tag);
+    if (!recIdx.length) throw new Error(`No <${tag}> record elements found under the root.`);
+    const first = recIdx[0].i, last = recIdx[recIdx.length-1].i;
+    const head = kids.slice(0, first).filter(k=>k.nodeName!==tag);
+    const tail = kids.slice(last+1).filter(k=>k.nodeName!==tag);
+    const recs = recIdx.map(x=>x.k);
+    const ser = new XMLSerializer();
+    const prolog = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    let rootOpen = '<' + root.nodeName;
+    for (const a of root.attributes)
+      rootOpen += ` ${a.name}="${a.value.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}"`;
+    rootOpen += '>';
+    const rootClose = `</${root.nodeName}>`;
+    const headStr = head.map(h=>ser.serializeToString(h)).join('\n');
+    const envBytes = prolog.length + rootOpen.length + rootClose.length + headStr.length + 40;
+
+    const parts = []; let cur = [], curBytes = 0;
+    const flush = () => { if (cur.length) { parts.push(cur); cur = []; curBytes = 0; } };
+    for (let i = 0; i < recs.length; i++) {
+      if (task?.cancelled) throw new Error('cancelled');
+      const s = ser.serializeToString(recs[i]);
+      const b = new Blob([s]).size;
+      const wouldOverflow = mode==='size' ? (curBytes + b + envBytes > maxBytes && cur.length)
+                          : mode==='count' ? cur.length >= maxCount
+                          : false;
+      if (wouldOverflow) flush();
+      cur.push({ s, node: recs[i] }); curBytes += b + 1;
+      if (i % 3000 === 0) { Task.progress(i/recs.length*0.7); await nextFrame(); }
+    }
+    flush();
+
+    const outs = [];
+    for (let p = 0; p < parts.length; p++) {
+      if (task?.cancelled) throw new Error('cancelled');
+      const group = parts[p];
+      let tailStr = tail.map(t=>ser.serializeToString(t)).join('\n');
+      if (Settings.data.keepCtrl && tail.some(t=>t.nodeName===tag+'Ctrl')) {   // recompute control record
+        const ctrl = tail.find(t=>t.nodeName===tag+'Ctrl').cloneNode(true);
+        const rows = ctrl.getElementsByTagName('LiczbaWierszyDziennika')[0];
+        if (rows) rows.textContent = String(group.length);
+        const sw = ctrl.getElementsByTagName('SumaWinien')[0] || ctrl.getElementsByTagName('SumaKwotWinien')[0];
+        const sm = ctrl.getElementsByTagName('SumaMa')[0]     || ctrl.getElementsByTagName('SumaKwotMa')[0];
+        if (sw || sm) {
+          let w = 0, m = 0;
+          for (const g of group) {
+            w += parseFloat(g.node.getElementsByTagName('KwotaWinien')[0]?.textContent) || 0;
+            m += parseFloat(g.node.getElementsByTagName('KwotaMa')[0]?.textContent) || 0;
+          }
+          if (sw) sw.textContent = w.toFixed(2);
+          if (sm) sm.textContent = m.toFixed(2);
+        }
+        tailStr = tail.map(t => t.nodeName===tag+'Ctrl' ? ser.serializeToString(ctrl) : ser.serializeToString(t)).join('\n');
+      }
+      const body = [prolog + rootOpen, headStr, group.map(g=>g.s).join('\n'), tailStr, rootClose]
+        .filter(Boolean).join('\n');
+      const blob = new Blob([body], { type:'application/xml' });
+      outs.push({ name: this.partName(d.name, p+1, parts.length), blob, records: group.length });
+      Task.progress(0.7 + (p+1)/parts.length*0.3); await nextFrame();
+    }
+    return outs;
+  },
+
+  /* -------- streaming splitting (no DOM; hundreds of MB, chunked I/O) --------
+   * Multi-section aware: real JPK_KR / JPK_KR_PD files contain SEVERAL repeated
+   * sections under the root (Dziennik*, KontoZapis*, ZOiS*, …), each followed
+   * by its own <XCtrl> control record. The engine tokenizes the file in chunks
+   * with a real tag stack (nesting-safe), captures every record element at the
+   * detected level, keeps everything else (Naglowek, Podmiot1, *Ctrl, container
+   * open/close tags) as an ordered envelope template, cuts parts in document
+   * order and recomputes every control record per part. */
+
+  /* Decide what a "record" is, from a stream scan (Xml.scanStream result). */
+  planFromScan(scan, forcedTag) {
+    const st = scan?.stats;
+    const isCtrl = n => /Ctrl$/i.test(n);
+    const containersOf = name => {
+      const out = new Set();
+      if (st) for (const k of st.pairs.keys()) { const [p, c] = k.split('>'); if (c === name) out.add(p); }
+      return out;
+    };
+    if (forcedTag) {
+      if (st?.depth2?.has(forcedTag) && !st?.depth1?.has(forcedTag))
+        return { level:2, names:new Set([forcedTag]), containers: containersOf(forcedTag) };
+      return { level:1, names:new Set([forcedTag]), containers:null };
+    }
+    if (st) {
+      const rep1 = [...st.depth1.entries()].filter(([n, c]) => c >= 2 && !isCtrl(n));
+      if (rep1.length) return { level:1, names:new Set(rep1.map(([n]) => n)), containers:null };
+      const rep2 = [...st.depth2.entries()].filter(([n, c]) => c >= 3 && !isCtrl(n));
+      if (rep2.length) {
+        const names = new Set(rep2.map(([n]) => n)), containers = new Set();
+        for (const n of names) for (const p of containersOf(n)) containers.add(p);
+        return { level:2, names, containers };
+      }
+    }
+    return { level:1, names:new Set([Settings.data.recordTag || 'Dziennik']), containers:null };
+  },
+
+  /* Chunked tokenizer emitting units in document order.
+   *   cb({name, text})        — a captured record element (name ∈ plan.names)
+   *   cb({name:null, text})   — envelope content (kept in every part)
+   * level 1 → records are children of the root; level 2 → records are children
+   * of container elements (plan.containers). Returns {total, ratio}. */
+  async streamUnits(src, plan, task, cb, p0 = 0, p1 = 0.85, meta = null) {
+    const dec = new TextDecoder('utf-8'), CH = 8*MB;
+    let buf = '', cur = 0, pos = 0, eof = false;
+    let bytesRead = 0, charsRead = 0, total = 0;
+    const more = async () => {
+      if (pos >= src.size) { eof = true; return false; }
+      if (task?.cancelled) throw new Error('cancelled');
+      const ab = await src.slice(pos, pos + CH).arrayBuffer();
+      pos += CH;
+      const str = dec.decode(ab, { stream: pos < src.size });
+      bytesRead += ab.byteLength; charsRead += str.length;
+      if (meta) meta.ratio = charsRead ? bytesRead / charsRead : 1;
+      buf += str;
+      Task.progress(p0 + Math.min(pos, src.size)/src.size * (p1 - p0));
+      await nextFrame();
+      return true;
+    };
+    const stack = [];
+    let capStart = -1, capName = null, capBase = -1;   /* active capture (record) */
+    let envFrom = 0;                                    /* start of pending envelope text */
+    const emitEnv = upto => {
+      if (upto > envFrom) { const t = buf.slice(envFrom, upto); if (t.trim()) cb({ name:null, text:t.trim() }); }
+      envFrom = upto;
+    };
+    const compact = () => {                             /* drop consumed prefix, keep capture */
+      const keep = capStart !== -1 ? Math.min(capStart, envFrom, cur) : Math.min(envFrom, cur);
+      if (keep > CH) {
+        buf = buf.slice(keep);
+        cur -= keep; envFrom -= keep;
+        if (capStart !== -1) capStart -= keep;
+      }
+    };
+    const recParent = () => plan.level === 1
+      ? stack.length === 1
+      : stack.length === 2 && (!plan.containers || plan.containers.has(stack[1]));
+    const wantWholeL1 = plan.level === 2;               /* non-container root children captured whole */
+
+    for (;;) {
+      const lt = buf.indexOf('<', cur);
+      if (lt === -1) { if (!(await more())) break; continue; }
+      cur = lt;
+      while (buf.length - cur < 12 && !eof) if (!(await more())) break;
+
+      const two = buf.slice(cur, cur + 2);
+      if (buf.startsWith('<!--', cur)) {
+        let e; while ((e = buf.indexOf('-->', cur + 4)) === -1) if (!(await more())) throw new Error('Unterminated comment in XML');
+        cur = e + 3; continue;
+      }
+      if (buf.startsWith('<![CDATA[', cur)) {
+        let e; while ((e = buf.indexOf(']]>', cur + 9)) === -1) if (!(await more())) throw new Error('Unterminated CDATA in XML');
+        cur = e + 3; continue;
+      }
+      if (two === '<?') {
+        let e; while ((e = buf.indexOf('?>', cur + 2)) === -1) if (!(await more())) throw new Error('Unterminated processing instruction');
+        cur = e + 2; continue;
+      }
+      if (two === '<!') {
+        let from = cur + 2, inSub = false, e = -1;
+        for (;;) {
+          const gt = buf.indexOf('>', from), br = buf.indexOf(inSub ? ']' : '[', from);
+          if (!inSub && gt !== -1 && (br === -1 || gt < br)) { e = gt; break; }
+          if (br !== -1) { inSub = !inSub; from = br + 1; continue; }
+          if (!(await more())) throw new Error('Unterminated <!DOCTYPE>');
+        }
+        cur = e + 1; continue;
+      }
+
+      /* element tag — find '>' outside quotes */
+      let i = cur + 1, q = 0, e = -1;
+      for (;;) {
+        for (; i < buf.length; i++) {
+          const c = buf.charCodeAt(i);
+          if (q) { if (c === q) q = 0; }
+          else if (c === 34 || c === 39) q = c;
+          else if (c === 62) { e = i; break; }
+        }
+        if (e !== -1) break;
+        if (!(await more())) throw new Error('Unterminated tag (missing ">")');
+      }
+      const tag = buf.slice(cur, e + 1);
+      const closing = tag.charCodeAt(1) === 47;
+      const selfClose = !closing && /\/\s*>$/.test(tag);
+      const name = closing ? tag.slice(2, -1).trim() : (/^<([^\s/>]+)/.exec(tag) || [,''])[1];
+
+      if (!closing) {
+        const startsRecord = capStart === -1 && recParent() &&
+          (plan.names.has(name) || (wantWholeL1 && stack.length === 1 && !plan.containers.has(name)));
+        if (startsRecord) {
+          emitEnv(cur);
+          capStart = cur; capName = name; capBase = stack.length;
+          if (selfClose) {
+            const text = buf.slice(capStart, e + 1);
+            (plan.names.has(name) ? (total++, cb({ name, text })) : cb({ name:null, text }));
+            capStart = -1; capName = null;
+            envFrom = e + 1;
+          }
+        } else if (capStart === -1 && plan.level === 2 && stack.length === 1 && plan.containers.has(name)) {
+          /* container open tag → envelope piece on its own */
+          emitEnv(cur);
+          cb({ name:null, text: tag, containerOpen: name });
+          envFrom = e + 1;
+        }
+        if (!selfClose) stack.push(name);
+      } else {
+        stack.pop();
+        if (capStart !== -1 && stack.length === capBase) {
+          const text = buf.slice(capStart, e + 1);
+          if (plan.names.has(capName)) { total++; cb({ name: capName, text }); }
+          else cb({ name:null, text });                 /* whole non-container L1 element */
+          capStart = -1; capName = null;
+          envFrom = e + 1;
+        } else if (capStart === -1 && plan.level === 2 && stack.length === 1 && plan.containers.has(name)) {
+          emitEnv(cur);
+          cb({ name:null, text: tag, containerClose: name });
+          envFrom = e + 1;
+        }
+      }
+      cur = e + 1;
+      compact();
+    }
+    emitEnv(buf.length);
+    return { total, ratio: charsRead ? bytesRead / charsRead : 1 };
+  },
+
+  /* Rewrite a <XCtrl> envelope piece with this part's row count / sums. */
+  ctrlRewrite(text, count, sumW, sumM) {
+    let t = text.replace(/(<LiczbaWierszy[^>]*>)[^<]*(<\/)/g, `$1${count}$2`);
+    if (sumW != null) t = t.replace(/(<Suma[A-Za-z]*Winien[^>]*>)[^<]*(<\/)/g, `$1${sumW.toFixed(2)}$2`);
+    if (sumM != null) t = t.replace(/(<Suma[A-Za-z]*Ma[^>]*>)[^<]*(<\/)/g, `$1${sumM.toFixed(2)}$2`);
+    return t;
+  },
+
+  async splitStream(d, opts, task) {
+    const { mode, maxBytes, maxCount } = opts;
+    const src = (!d.big && d.text != null) ? new Blob([d.text]) : (d.file || new Blob([d.text || '']));
+    if (!d.scan) d.scan = await Xml.scanStream(src, task, 0, 0.15);
+    if (!d.scan.ok) throw new Error(`XML is not well-formed (line ${d.scan.line}): ${d.scan.error}`);
+    const plan = this.planFromScan(d.scan, opts.tag && !opts.auto ? opts.tag : null);
+
+    /* pass 1 → template of envelope pieces + record runs; records buffered per
+     * part only, flushed to a Blob as soon as a part is complete. */
+    const template = [];                                /* {env:text} | {run:idx, name} */
+    const parts = [];                                   /* {blob?, records, bytes, perSec:Map} */
+    let curRecs = [], curBytes = 0, curPer = new Map(); /* current part accumulation */
+    let runIdx = -1, lastWasRec = false, lastName = null;
+    const meta = { ratio: 1 };                          /* live bytes-per-char, updated per chunk */
+    const envBytesArr = [];
+    const secStats = rec => {                           /* sums for Ctrl recompute */
+      let w = 0, m = 0, mt;
+      const rw = /<Kwota[A-Za-z]*Winien[^>]*>\s*([-\d.,]+)/g, rm = /<Kwota[A-Za-z]*Ma[^>]*>\s*([-\d.,]+)/g;
+      while ((mt = rw.exec(rec))) w += parseFloat(mt[1].replace(',', '.')) || 0;
+      while ((mt = rm.exec(rec))) m += parseFloat(mt[1].replace(',', '.')) || 0;
+      return { w, m };
+    };
+    const finishPart = () => {
+      if (!curRecs.length) return;
+      parts.push({ recs: curRecs, records: curRecs.length, perSec: curPer });
+      curRecs = []; curBytes = 0; curPer = new Map();
+    };
+    const res = await this.streamUnits(src, plan, task, u => {
+      if (u.name === null) {
+        template.push({ env: u.text });
+        envBytesArr.push(u.text.length);
+        lastWasRec = false;
+        return;
+      }
+      if (!lastWasRec || lastName !== u.name) { runIdx++; template.push({ run: runIdx, name: u.name }); }
+      lastWasRec = true; lastName = u.name;
+      const est = u.text.length * meta.ratio + 1;
+      const overflow = mode === 'size'  ? (curBytes + est > maxBytes * 0.985 && curRecs.length)
+                     : mode === 'count' ? curRecs.length >= maxCount
+                     : false;
+      if (overflow) finishPart();
+      curRecs.push({ name: u.name, run: runIdx, text: u.text });
+      curBytes += est;
+      const st = secStats(u.text);
+      const agg = curPer.get(u.name) || { n:0, w:0, m:0 };
+      agg.n++; agg.w += st.w; agg.m += st.m;
+      curPer.set(u.name, agg);
+    }, 0, 0.8, meta);
+    finishPart();
+    if (!res.total) throw new Error(`No record elements found (looked for: ${[...plan.names].join(', ')} at level ${plan.level}).`);
+
+    /* pass 2 → assemble each part from the template */
+    const doCtrl = Settings.data.keepCtrl;
+    const outs = [];
+    for (let p = 0; p < parts.length; p++) {
+      if (task?.cancelled) throw new Error('cancelled');
+      const part = parts[p];
+      const byRun = new Map();
+      for (const r of part.recs) { if (!byRun.has(r.run)) byRun.set(r.run, []); byRun.get(r.run).push(r.text); }
+      const pieces = [];
+      for (const item of template) {
+        if (item.env !== undefined) {
+          let envText = item.env;
+          if (doCtrl) {
+            const cm = /^<([A-Za-z][\w.-]*)Ctrl[\s>]/.exec(envText);
+            if (cm) {
+              const base = [...plan.names].find(n => n === cm[1] || n === cm[1] + 'Wiersz' || cm[1] === n.replace(/Wiersz$/, ''));
+              const agg = part.perSec.get(base) || part.perSec.get(cm[1]) || { n:0, w:0, m:0 };
+              envText = this.ctrlRewrite(envText, agg.n, agg.w, agg.m);
+            }
+          }
+          pieces.push(envText, '\n');
+        } else {
+          const rs = byRun.get(item.run);
+          if (rs) for (const r of rs) pieces.push(r, '\n');
+        }
+      }
+      const blob = new Blob(pieces, { type: 'application/xml' });
+      outs.push({ name: this.partName(d.name, p + 1, parts.length), blob, records: part.records });
+      part.recs = null;                                  /* release strings */
+      Task.progress(0.8 + (p + 1) / parts.length * 0.2);
+      await nextFrame();
+    }
+    d.splitPlan = { level: plan.level, names: [...plan.names] };
+    Task.progress(1);
+    return outs;
+  },
+
+  partName(base, i, total) {
+    const pad = String(i).padStart(String(total).length, '0');
+    return base.replace(/\.xml$/i, '') + `_part${pad}of${total}.xml`;
+  },
+
+  async run(d, opts, task) {
+    /* DOM splitter only for small single-section files where it is exact;
+     * multi-section files and everything big go through the stream engine. */
+    if (d.doc && !d.big) {
+      const kids = [...d.doc.documentElement.children];
+      const freq = new Map();
+      for (const k of kids) freq.set(k.nodeName, (freq.get(k.nodeName) || 0) + 1);
+      const repeated = [...freq.entries()].filter(([n, c]) => c >= 2 && !/Ctrl$/i.test(n));
+      if (repeated.length <= 1) return this.splitDom(d, opts, task);
+    }
+    return this.splitStream(d, opts, task);
+  }
+};
+
+/* ============================================================================
+ * Downloads
+ * ========================================================================== */
+function download(blob, name) {
+  const a = el('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  Log.add(`Downloaded ${name} (${fmtBytes(blob.size)})`, 'ok');
+}
+
+/* ============================================================================
+ * Charts — pure Canvas
+ * ========================================================================== */
+const Charts = {
+  css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); },
+  setup(cv, w, h) {
+    const dpr = devicePixelRatio || 1;
+    cv.width = w*dpr; cv.height = h*dpr; cv.style.width = w+'px'; cv.style.height = h+'px';
+    const c = cv.getContext('2d'); c.scale(dpr,dpr); return c;
+  },
+  donut(cv, ratio, label, sub) {                       // gateway gauge
+    const W=150,H=150,c=this.setup(cv,W,H),cx=W/2,cy=H/2,r=58;
+    const over = ratio > 1;
+    c.lineWidth = 13; c.lineCap='round';
+    c.strokeStyle = this.css('--line'); c.beginPath();
+    c.arc(cx,cy,r,-Math.PI/2,Math.PI*1.5); c.stroke();
+    const grad = c.createLinearGradient(0,0,W,H);
+    grad.addColorStop(0, this.css(over?'--err':'--accent2'));
+    grad.addColorStop(1, this.css(over?'--err':'--accent'));
+    c.strokeStyle = grad; c.beginPath();
+    c.arc(cx,cy,r,-Math.PI/2,-Math.PI/2 + Math.min(1,ratio)*Math.PI*2); c.stroke();
+    c.fillStyle = this.css('--text'); c.textAlign='center';
+    c.font = '700 22px '+this.css('--font-ui'); c.fillText(label, cx, cy+2);
+    c.fillStyle = this.css('--muted'); c.font='11px '+this.css('--font-ui');
+    c.fillText(sub, cx, cy+22);
+  },
+  bars(cv, data, w=440, h=190) {                       // [{label, value}]
+    const c = this.setup(cv,w,h);
+    if (!data.length) return;
+    const max = Math.max(...data.map(d=>d.value)) || 1;
+    const bw = Math.min(46, (w-50)/data.length - 12);
+    const grad = c.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,this.css('--accent')); grad.addColorStop(1,this.css('--accent2'));
+    data.forEach((d,i) => {
+      const x = 30 + i*((w-50)/data.length) + 6;
+      const bh = Math.max(3,(d.value/max)*(h-58));
+      c.fillStyle = grad;
+      const y = h-34-bh;
+      c.beginPath(); c.roundRect(x, y, bw, bh, 5); c.fill();
+      c.fillStyle = this.css('--muted'); c.font='10px '+this.css('--font-ui'); c.textAlign='center';
+      c.fillText(d.label.length>9?d.label.slice(0,8)+'…':d.label, x+bw/2, h-18);
+      c.fillStyle = this.css('--text'); c.font='600 10px '+this.css('--font-ui');
+      c.fillText(fmtInt(d.value), x+bw/2, y-5);
+    });
+  }
+};
+
+/* ============================================================================
+ * Editor — custom (line numbers, current line, find/replace, goto, folding-lite)
+ * ========================================================================== */
+const Editor = {
+  ta:null, hi:null, gut:null, matches:[], matchIdx:-1,
+  init() {
+    this.ta = $('#ed'); this.hi = $('#hilite'); this.gut = $('#gutter');
+    this.ta.addEventListener('input', () => { this.onChange(); });
+    this.ta.addEventListener('scroll', () => {
+      this.hi.scrollTop = this.ta.scrollTop; this.hi.scrollLeft = this.ta.scrollLeft;
+      this.gut.scrollTop = this.ta.scrollTop;
+    });
+    this.ta.addEventListener('keyup', () => this.updateCaret());
+    this.ta.addEventListener('click', () => this.updateCaret());
+    this.ta.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      Ctx.show(e.clientX, e.clientY, [
+        { label:'Cut',        k:'Ctrl+X', fn:()=>document.execCommand('cut') },
+        { label:'Copy',       k:'Ctrl+C', fn:()=>document.execCommand('copy') },
+        { label:'Paste',      k:'Ctrl+V', fn:async()=>{ try{ this.insert(await navigator.clipboard.readText()); }catch(_){ Toast.show('Clipboard blocked by browser — use Ctrl+V','warn'); } } },
+        { label:'Select all', k:'Ctrl+A', fn:()=>{ this.ta.focus(); this.ta.select(); } },
+        '-',
+        { label:'Pretty print',  k:'Ctrl+P', fn:()=>App.pretty() },
+        { label:'Validate file', k:'Ctrl+E', fn:()=>App.go('validate', true) },
+        { label:'Go to line…',   k:'Ctrl+G', fn:()=>this.gotoLine() },
+      ]);
+    });
+  },
+  set(text) {
+    this.ta.value = text ?? '';
+    this.onChange(true);
+  },
+  get(){ return this.ta.value; },
+  insert(t) {
+    const s = this.ta.selectionStart, e = this.ta.selectionEnd;
+    this.ta.setRangeText(t, s, e, 'end'); this.onChange();
+  },
+  onChange(fresh=false) {
+    const d = Store.active;
+    if (d && !fresh) { d.text = this.ta.value; d.dirty = true; }
+    this.renderGutter(); this.renderHighlight(); this.updateCaret();
+  },
+  renderGutter() {
+    const n = this.ta.value.split('\n').length;
+    const cur = this.curLine();
+    let out = '';
+    for (let i = 1; i <= n; i++)
+      out += i === cur ? `<span class="cur">${i}</span>\n` : i + '\n';
+    this.gut.innerHTML = out;
+    this.gut.scrollTop = this.ta.scrollTop;
+  },
+  renderHighlight() {
+    const v = this.ta.value;
+    if (v.length > Settings.data.highlightLimitKB*1024) {   // plain mode for huge docs
+      this.ta.classList.add('plain'); this.hi.innerHTML = ''; return;
+    }
+    this.ta.classList.remove('plain');
+    this.hi.innerHTML = Xml.highlight(v) + '\n';
+  },
+  curLine() {
+    return this.ta.value.slice(0, this.ta.selectionStart).split('\n').length;
+  },
+  updateCaret() {
+    const line = this.curLine();
+    const col = this.ta.selectionStart - this.ta.value.lastIndexOf('\n', this.ta.selectionStart-1);
+    $('#sb-pos').textContent = `Ln ${line}, Col ${col}`;
+    this.renderGutter();
+  },
+  async gotoLine() {
+    const v = await Dialog.prompt('Go to line', 'Line number:');
+    if (!v) return;
+    const lines = this.ta.value.split('\n');
+    const n = Math.max(1, Math.min(lines.length, parseInt(v)||1));
+    let idx = 0; for (let i = 0; i < n-1; i++) idx += lines[i].length + 1;
+    this.ta.focus(); this.ta.setSelectionRange(idx, idx + lines[n-1].length);
+    const lh = 12.5*1.55;
+    this.ta.scrollTop = Math.max(0, (n-6)*lh);
+    this.updateCaret();
+  },
+  find(q, { regex=false } = {}) {
+    this.matches = []; this.matchIdx = -1;
+    if (!q) { $('#find-count').textContent=''; return; }
+    try {
+      const re = regex ? new RegExp(q, 'g') : new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+      let m; const v = this.ta.value;
+      while ((m = re.exec(v)) && this.matches.length < 20000) {
+        this.matches.push([m.index, m.index + (m[0].length||1)]);
+        if (!m[0].length) re.lastIndex++;
+      }
+    } catch(_) {}
+    $('#find-count').textContent = this.matches.length ? `${this.matches.length} match(es)` : 'No matches';
+    if (this.matches.length) this.findNext();
+  },
+  findNext(dir=1) {
+    if (!this.matches.length) return;
+    this.matchIdx = (this.matchIdx + dir + this.matches.length) % this.matches.length;
+    const [s,e] = this.matches[this.matchIdx];
+    this.ta.focus(); this.ta.setSelectionRange(s,e);
+    const line = this.ta.value.slice(0,s).split('\n').length;
+    this.ta.scrollTop = Math.max(0,(line-6)*12.5*1.55);
+    $('#find-count').textContent = `${this.matchIdx+1} / ${this.matches.length}`;
+    this.updateCaret();
+  },
+  replaceOne(q, r) {
+    if (this.matchIdx < 0) { this.find(q); return; }
+    const [s,e] = this.matches[this.matchIdx];
+    this.ta.setRangeText(r, s, e, 'select');
+    this.onChange(); this.find(q);
+  },
+  replaceAll(q, r) {
+    if (!q) return;
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+    const before = this.ta.value;
+    this.ta.value = before.replace(re, r);
+    const n = (before.match(re)||[]).length;
+    this.onChange();
+    Toast.show(`Replaced ${n} occurrence(s)`, n?'ok':'warn');
+  }
+};
+
+/* ============================================================================
+ * Tree view (lazy, capped children)
+ * ========================================================================== */
+const Tree = {
+  render(container, doc) {
+    container.innerHTML = '';
+    if (!doc) { container.append(el('div',{class:'muted'},'No parsed document (file too large for DOM mode or not well-formed).')); return; }
+    container.append(this.node(doc.documentElement, 0));
+  },
+  node(elm, depth) {
+    const wrap = el('div', { class:'tnode' + (depth<2?' open':'') });
+    const row = el('div', { class:'trow', tabindex:'0', role:'treeitem' });
+    const hasKids = elm.children.length > 0;
+    const tw = el('span', { class:'twist' }, hasKids ? '▶' : '·');
+    row.append(tw, el('span',{class:'tname'}, '<'+elm.nodeName+'>'));
+    for (const a of [...elm.attributes].slice(0,4))
+      row.append(el('span',{class:'tattr'}, ` ${a.name}="${a.value.slice(0,30)}"`));
+    if (hasKids) row.append(el('span',{class:'tcount'}, ` (${elm.children.length})`));
+    else {
+      const t = elm.textContent.trim();
+      if (t) row.append(el('span',{class:'ttext'}, ' = ' + t.slice(0,120)));
+    }
+    wrap.append(row);
+    if (hasKids) {
+      const kids = el('div', { class:'kids' });
+      let built = false;
+      const build = () => {
+        if (built) return; built = true;
+        const cap = 400;
+        [...elm.children].slice(0, cap).forEach(c => kids.append(this.node(c, depth+1)));
+        if (elm.children.length > cap)
+          kids.append(el('div',{class:'tnode muted small'}, `… ${fmtInt(elm.children.length-cap)} more siblings (capped for performance)`));
+      };
+      if (depth < 2) build();
+      const toggle = () => { wrap.classList.toggle('open'); if (wrap.classList.contains('open')) build(); };
+      tw.style.cursor = 'pointer';
+      row.addEventListener('dblclick', toggle);
+      tw.addEventListener('click', toggle);
+      row.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); toggle(); } });
+      wrap.append(kids);
+    }
+    return wrap;
+  }
+};
+
+/* ============================================================================
+ * Sample JPK_KR_PD generator (offline demo data)
+ * ========================================================================== */
+/* Adapt a streaming-scan result to the stats shape the Analyze view expects,
+ * so 150 MB files get real numbers instead of an empty screen. */
+function statsFromScan(scan, size) {
+  const st = scan.stats;
+  const nodes = st.elements + st.textRuns + st.comments + st.cdata + st.pis;
+  const rootGroups = [...st.depth1.entries()]
+    .map(([name, times]) => ({ name, times, count: times }))
+    .sort((a, b) => b.count - a.count);
+  return {
+    nodes, elements: st.elements, attributes: st.attributes,
+    textNodes: st.textRuns, comments: st.comments, cdata: st.cdata, pis: st.pis,
+    maxDepth: st.maxDepth, namespaces: st.namespaces, names: st.names,
+    textBytes: st.textBytes, rootGroups,
+    repeated: [...st.names.entries()].filter(([,c]) => c > 1).sort((a,b) => b[1]-a[1]).slice(0, 12),
+    memoryEstimate: nodes*96 + st.textBytes*2 + st.attributes*64,
+    complexity: Math.round(Math.log2(1 + st.elements) * (1 + st.maxDepth/8) * (1 + st.names.size/60) * 10) / 10,
+    fromScan: true
+  };
+}
+
+function generateSample(rows = 400) {
+  const pad = (n,l=6)=>String(n).padStart(l,'0');
+  const nips = ['5261040828','7010001454','5252248481','1132191233','8992689516'];
+  const accounts = ['010','130','201','202','300','401','402','490','700','760'];
+  const descs = ['Faktura sprzedaży','Faktura zakupu','Wyciąg bankowy','Amortyzacja ŚT','PK — przeksięgowanie','Lista płac','Delegacja','Nota odsetkowa'];
+  let sumW = 0, sumM = 0, out = [];
+  out.push('<?xml version="1.0" encoding="UTF-8"?>');
+  out.push('<JPK xmlns="http://crd.gov.pl/wzor/2025/13/09/13092/">');
+  out.push('  <Naglowek>');
+  out.push('    <KodFormularza kodSystemowy="JPK_KR_PD (1)" wersjaSchemy="1-0">JPK_KR_PD</KodFormularza>');
+  out.push('    <WariantFormularza>1</WariantFormularza>');
+  out.push('    <CelZlozenia>1</CelZlozenia>');
+  out.push(`    <DataWytworzeniaJPK>${new Date().toISOString().slice(0,19)}</DataWytworzeniaJPK>`);
+  out.push('    <DataOd>2025-01-01</DataOd><DataDo>2025-12-31</DataDo>');
+  out.push('    <KodUrzedu>1449</KodUrzedu>');
+  out.push('  </Naglowek>');
+  out.push('  <Podmiot1>');
+  out.push('    <NIP>5261040828</NIP>');
+  out.push('    <PelnaNazwa>DEMO Spolka z o.o.</PelnaNazwa>');
+  out.push('  </Podmiot1>');
+  for (let i = 1; i <= rows; i++) {
+    const amt = (Math.random()*90000+50).toFixed(2);
+    sumW += +amt; sumM += +amt;
+    const mth = pad(1+Math.floor(Math.random()*12),2), day = pad(1+Math.floor(Math.random()*28),2);
+    out.push('  <Dziennik>');
+    out.push(`    <NrZapisu>${pad(i)}</NrZapisu>`);
+    out.push(`    <DataOperacji>2025-${mth}-${day}</DataOperacji>`);
+    out.push(`    <OpisOperacji>${descs[i%descs.length]} nr ${i}/2025</OpisOperacji>`);
+    out.push(`    <KontoWinien>${accounts[i%accounts.length]}</KontoWinien>`);
+    out.push(`    <KontoMa>${accounts[(i+3)%accounts.length]}</KontoMa>`);
+    out.push(`    <KwotaWinien>${amt}</KwotaWinien>`);
+    out.push(`    <KwotaMa>${amt}</KwotaMa>`);
+    out.push(`    <KodKontrahenta>K${pad(i%40,4)}</KodKontrahenta>`);
+    out.push(`    <NIPKontrahenta><NIP>${nips[i%nips.length]}</NIP></NIPKontrahenta>`);
+    out.push('  </Dziennik>');
+  }
+  out.push('  <DziennikCtrl>');
+  out.push(`    <LiczbaWierszyDziennika>${rows}</LiczbaWierszyDziennika>`);
+  out.push(`    <SumaWinien>${sumW.toFixed(2)}</SumaWinien>`);
+  out.push(`    <SumaMa>${sumM.toFixed(2)}</SumaMa>`);
+  out.push('  </DziennikCtrl>');
+  out.push('</JPK>');
+  return out.join('\n');
+}
+</script>
+<script>
+"use strict";
+/* ============================================================================
+ * UI — views, tabs, navigation, status bar
+ * ========================================================================== */
+const NAV = [
+  { id:'dashboard', label:'Dashboard', k:'1', icon:'M3 12h7V3H3v9Zm11 9h7v-9h-7v9Zm0-18v6h7V3h-7ZM3 21h7v-6H3v6Z' },
+  { id:'editor',    label:'Editor',    k:'2', icon:'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z' },
+  { id:'tree',      label:'Tree view', k:'3', icon:'M6 3v6m0 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 6v6m12-3h-6m6-9h-6' },
+  { id:'validate',  label:'Validation',k:'4', icon:'M9 12l2 2 4-4m5 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
+  { id:'split',     label:'Split',     k:'5', icon:'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3M12 8v8' },
+  { id:'analyze',   label:'Analysis',  k:'6', icon:'M3 3v18h18M8 17V9m4 8V5m4 12v-6' },
+  { id:'export',    label:'Export',    k:'7', icon:'M12 15V3m0 12-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2' },
+  { id:'settings',  label:'Settings',  k:'8', icon:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2-1.2L14.5 3h-5l-.4 2.6a7.5 7.5 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2 1.2l.4 2.6h5l.4-2.6a7.5 7.5 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z' },
+];
+
+const UI = {
+  view: 'dashboard',
+  init() {
+    const nav = $('#nav');
+    NAV.forEach(n => {
+      nav.append(el('button', { class:'navbtn', id:'nav-'+n.id, 'aria-label':n.label,
+        onclick: () => App.go(n.id) },
+        el('span',{html:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><path d="${n.icon}"/></svg>`}),
+        n.label, el('span',{class:'kbd'},'Ctrl+'+n.k)));
+    });
+    this.renderRecents();
+  },
+  go(id) {
+    this.view = id;
+    $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-'+id));
+    $$('.navbtn').forEach(b => b.classList.toggle('active', b.id === 'nav-'+id));
+    Views[id]?.();
+  },
+  renderRecents() {
+    const r = $('#recent'); r.innerHTML = '';
+    if (!Store.recents.length) { r.append(el('div',{class:'muted small',style:'padding:6px 10px'},'Nothing yet')); return; }
+    Store.recents.forEach(x => r.append(
+      el('button',{class:'recent-item', onclick(){
+        Toast.show('Browsers cannot reopen local files automatically — pick it again.','info');
+        $('#file-input').click();
+      }},
+      el('span',{class:'rn'},x.name),
+      el('span',{class:'rm'},`${fmtBytes(x.size)} · ${new Date(x.t).toLocaleDateString()}`))));
+  },
+  renderTabs() {
+    const t = $('#tabs'); t.innerHTML = '';
+    for (const d of Store.docs.values()) {
+      const tab = el('div', { class:'tab'+(d.id===Store.activeId?' active':''), role:'tab',
+        'aria-selected': d.id===Store.activeId, tabindex:'0',
+        onclick: () => App.activate(d.id),
+        onkeydown: e => { if (e.key==='Enter') App.activate(d.id); } },
+        el('span',{class:'tn'}, (d.dirty?'● ':'') + d.name),
+        el('span',{class:'x', title:'Close', onclick(e){ e.stopPropagation(); App.closeDoc(d.id); }},'✕'));
+      t.append(tab);
+    }
+  },
+  status() {
+    const d = Store.active;
+    $('#sb-file').textContent = d ? `${d.name} — ${fmtBytes(d.size)}` : 'No file loaded';
+    $('#sb-enc').textContent = d ? d.encoding : '';
+    $('#sb-nodes').textContent = d?.stats ? `${fmtInt(d.stats.elements)} elements` : '';
+    const chip = $('#limit-chip');
+    chip.classList.remove('ok','over');
+    if (d) {
+      chip.classList.add(d.size > MF_LIMIT ? 'over' : 'ok');
+      $('#chip-size').textContent = `· file ${(d.size/MF_LIMIT*100).toFixed(1)}%`;
+    } else $('#chip-size').textContent = '';
+  }
+};
+
+/* ============================================================================
+ * Views renderers
+ * ========================================================================== */
+const Views = {
+  /* ------------------------------ dashboard ----------------------------- */
+  dashboard() {
+    const v = $('#view-dashboard'); v.innerHTML = '';
+    const d = Store.active;
+    v.append(el('div',{id:'drop',role:'button',tabindex:'0','aria-label':'Open XML file'},
+      el('div',{class:'big'},'Drop a JPK_CIT / XML file here'),
+      el('div',{}, 'or click to browse — everything is processed locally, nothing leaves this machine. ',
+        el('kbd',{},'Ctrl+O'))));
+    const drop = $('#drop', v);
+    drop.onclick = () => $('#file-input').click();
+    drop.onkeydown = e => { if (e.key==='Enter') $('#file-input').click(); };
+
+    const cards = el('div',{class:'cards',style:'margin-top:14px'});
+    const gcard = el('div',{class:'card'}, el('h3',{},'MF gateway — 100 MB limit'));
+    const gw = el('div',{class:'gauge-wrap'});
+    const cv = el('canvas'); gw.append(cv);
+    const ratio = d ? d.size/MF_LIMIT : 0;
+    const leg = el('div',{class:'legend'},
+      el('div',{class:'li'},el('span',{class:'sw',style:'background:var(--accent2)'}),'Current file size'),
+      el('div',{class:'li'},el('span',{class:'sw',style:'background:var(--line)'}),'Gateway headroom'),
+      el('div',{class:'li muted small'}, d
+        ? (d.size>MF_LIMIT ? `Over by ${fmtBytes(d.size-MF_LIMIT)} → split into ~${Math.ceil(d.size/(Settings.data.splitTargetMB*MB))} parts`
+                           : `${fmtBytes(MF_LIMIT-d.size)} of headroom left`)
+        : 'Load a file to check gateway compliance'));
+    gw.append(leg); gcard.append(gw); cards.append(gcard);
+
+    const mk = (title, val, sub) => el('div',{class:'card'},
+      el('h3',{},title), el('div',{class:'metric'}, val, sub?el('small',{},sub):null));
+    cards.append(mk('File size', d?fmtBytes(d.size):'—', d && d.size>MF_LIMIT ? 'over limit' : ''));
+    cards.append(mk('Elements', d?.stats?fmtInt(d.stats.elements):'—', d?.big?'streaming scan':''));
+    cards.append(mk('Well-formed', !d ? '—' : d.doc ? 'yes' : d.wf === true ? 'yes' : d.wf === false ? 'no' : d.parseError ? 'no' : '—',
+      !d ? '' : d.big ? 'verified by stream scan' : d.parseError ? `line ${d.parseLine||'?'}` : ''));
+    cards.append(mk('Encoding', d?d.encoding.split(' ')[0]:'—', d?(d.utf8ok===false?'invalid UTF-8':d.utf8ok?'valid UTF-8':''):''));
+    const issues = d?.issues;
+    const errs = issues?issues.filter(i=>i.sev==='err').length:null;
+    cards.append(mk('Validation', errs==null?'—':(errs? errs+' errors':'clean'), issues?issues.filter(i=>i.sev==='warn').length+' warnings':''));
+    v.append(cards);
+    requestAnimationFrame(()=>Charts.donut(cv, ratio,
+      d?fmtBytes(d.size):'0 MB', ratio>1?'exceeds MF limit':'of 100 MB'));
+
+    const why = el('div',{class:'card',style:'margin-top:14px'},
+      el('h3',{},'Why JPK_KR_PD files break the gateway'),
+      el('div',{class:'small muted',style:'line-height:1.7'},
+        'JPK_CIT reporting carries the complete accounting ledger — one XML record per journal operation, plus counterparties, markers and fixed-asset detail. For companies with hundreds of thousands of postings a year the export easily exceeds 100 MB, and the Ministry of Finance gateway rejects it. This studio validates the file (technical + business rules), recomputes control records, and splits JPK_KR_PD into compliant parts you can submit sequentially and archive as ZIP.'));
+    if (d?.big && d.wf !== false && d.size <= 300*MB) {
+      const adv = el('div',{class:'card',style:'margin-top:14px'},
+        el('h3',{},'Advanced'),
+        el('div',{class:'row'},
+          el('button',{class:'btn',onclick(){ App.forceDom(); }},'Load into DOM anyway'),
+          el('span',{class:'small muted'},'Enables the tree view and XPath for this file. Needs roughly '
+            + fmtBytes(d.size*10) + ' of browser memory — the tab may become slow. Streaming validate/analyze/split work without it.')));
+      v.append(adv);
+    }
+    v.append(why);
+  },
+
+  /* ------------------------------- editor ------------------------------- */
+  editor() {
+    const v = $('#view-editor');
+    if (!v.dataset.built) {
+      v.dataset.built = '1';
+      v.innerHTML = `
+        <div id="editor-wrap">
+          <div id="editor-bar">
+            <button class="btn" id="e-pretty" title="Ctrl+P">Pretty print</button>
+            <button class="btn" id="e-find" title="Ctrl+F">Find / Replace</button>
+            <button class="btn" id="e-goto" title="Ctrl+G">Go to line</button>
+            <button class="btn" id="e-undo" title="Ctrl+Z">Undo</button>
+            <button class="btn" id="e-redo" title="Ctrl+Y">Redo</button>
+            <button class="btn" id="e-wrap">Wrap: off</button>
+            <span style="flex:1"></span>
+            <button class="btn" id="e-xpath">XPath…</button>
+            <button class="btn acc" id="e-apply">Apply changes</button>
+          </div>
+          <div id="findbar">
+            <input id="find-q" placeholder="Find… (Enter = next)" aria-label="Find">
+            <button class="btn" id="find-prev">◀</button>
+            <button class="btn" id="find-next">▶</button>
+            <span class="cnt" id="find-count"></span>
+            <input id="repl-q" placeholder="Replace with…" aria-label="Replace">
+            <button class="btn" id="repl-one">Replace</button>
+            <button class="btn" id="repl-all">Replace all</button>
+            <button class="btn" id="find-close">✕</button>
+          </div>
+          <div id="editor-body">
+            <div id="gutter" aria-hidden="true"></div>
+            <div id="edstack">
+              <pre id="hilite" aria-hidden="true"></pre>
+              <textarea id="ed" spellcheck="false" aria-label="XML editor" wrap="off"></textarea>
+            </div>
+          </div>
+        </div>`;
+      Editor.init();
+      $('#e-pretty').onclick = () => App.pretty();
+      $('#e-goto').onclick   = () => Editor.gotoLine();
+      $('#e-undo').onclick   = () => { $('#ed').focus(); document.execCommand('undo'); Editor.onChange(); };
+      $('#e-redo').onclick   = () => { $('#ed').focus(); document.execCommand('redo'); Editor.onChange(); };
+      $('#e-find').onclick   = () => App.toggleFind(true);
+      $('#find-close').onclick = () => App.toggleFind(false);
+      $('#e-wrap').onclick   = e => {
+        const ta = $('#ed'), on = ta.getAttribute('wrap') !== 'soft';
+        ta.setAttribute('wrap', on?'soft':'off');
+        $('#hilite').style.whiteSpace = on?'pre-wrap':'pre';
+        e.target.textContent = 'Wrap: ' + (on?'on':'off');
+      };
+      $('#find-q').addEventListener('input', e => Editor.find(e.target.value));
+      $('#find-q').addEventListener('keydown', e => { if (e.key==='Enter') Editor.findNext(e.shiftKey?-1:1); });
+      $('#find-next').onclick = () => Editor.findNext(1);
+      $('#find-prev').onclick = () => Editor.findNext(-1);
+      $('#repl-one').onclick  = () => Editor.replaceOne($('#find-q').value, $('#repl-q').value);
+      $('#repl-all').onclick  = () => Editor.replaceAll($('#find-q').value, $('#repl-q').value);
+      $('#e-apply').onclick   = () => App.applyEditor();
+      $('#e-xpath').onclick   = () => App.xpathDialog();
+    }
+    const d = Store.active;
+    const tooBigForTextarea = d && !d.big && ((d.text?.length || 0) > 8*MB || (d.forcedDom && d.text == null));
+    if (d && !d.big && !tooBigForTextarea) {
+      if (Editor.get() !== (d.text ?? '')) Editor.set(d.text ?? '');
+    } else if (d && (d.big || tooBigForTextarea)) {
+      Editor.set([`<!-- ${d.name} (${fmtBytes(d.size)}) is opened in large-file mode. -->`,
+        '<!-- The full text is not loaded into the editor: a textarea this size would freeze the browser. -->',
+        '<!-- Validation (technical + JPK business rules), analysis and splitting all run in streaming mode -->',
+        '<!-- and fully support this file — use the Validate, Analyze and Split views. -->'].join('\n'));
+    } else Editor.set('');
+  },
+
+  /* -------------------------------- tree -------------------------------- */
+  tree() {
+    const v = $('#view-tree'); v.innerHTML = '';
+    const d = Store.active;
+    const bar = el('div',{class:'row',style:'margin-bottom:12px'},
+      el('button',{class:'btn',onclick(){ $$('#tree .tnode').forEach(n=>n.classList.add('open')); }},'Expand all (rendered)'),
+      el('button',{class:'btn',onclick(){ $$('#tree .tnode').forEach((n,i)=>{ if(i) n.classList.remove('open'); }); }},'Collapse all'),
+      el('span',{class:'muted small'}, d?.doc ? 'Double-click a node or use the arrow to toggle.' : ''));
+    v.append(bar, el('div',{class:'card'}, el('div',{id:'tree',role:'tree'})));
+    Tree.render($('#tree'), d?.doc || null);
+  },
+
+  /* ------------------------------ validate ------------------------------ */
+  async validate(run=false) {
+    const v = $('#view-validate'); v.innerHTML = '';
+    const d = Store.active;
+    if (!d) { v.append(el('div',{class:'card muted'},'Open a file first.')); return; }
+    v.append(el('div',{class:'row',style:'margin-bottom:12px'},
+      el('button',{class:'btn acc',onclick(){ Views.validate(true); }},'Run validation'),
+      el('button',{class:'btn',onclick(){ App.exportReportPdf(); }},'Export report as PDF'),
+      el('span',{class:'muted small'},'Technical checks + JPK_KR_PD business rules (NIP checksum, control sums, journal balance, period, duplicates).')));
+    const box = el('div',{}); v.append(box);
+    const paint = () => {
+      box.innerHTML = '';
+      if (!d.issues) { box.append(el('div',{class:'card muted'},'Not validated yet.')); return; }
+      const s = { err:0, warn:0, ok:0, info:0 };
+      d.issues.forEach(i=>s[i.sev]++);
+      box.append(el('div',{class:'row',style:'margin-bottom:12px'},
+        el('span',{class:'pill err'},s.err+' errors'), el('span',{class:'pill warn'},s.warn+' warnings'),
+        el('span',{class:'pill ok'},s.ok+' passed'), el('span',{class:'pill info'},s.info+' info')));
+      d.issues.forEach(i => box.append(el('div',{class:'issue '+i.sev},
+        el('span',{class:'ic'}), el('div',{}, el('b',{},i.title), el('div',{class:'d'},i.detail)))));
+    };
+    if (run) {
+      const task = Task.start('Validating…');
+      try { await Validator.run(d, task); Toast.show('Validation finished','ok'); }
+      catch(e){ if (e.message!=='cancelled') Toast.show('Validation failed: '+e.message,'err'); }
+      Task.end(); UI.status();
+    }
+    paint();
+  },
+
+  /* -------------------------------- split ------------------------------- */
+  split() {
+    const v = $('#view-split'); v.innerHTML = '';
+    const d = Store.active;
+    if (!d) { v.append(el('div',{class:'card muted'},'Open a file first.')); return; }
+    const tag = Splitter.detectRecordTag(d);
+    const card = el('div',{class:'card'});
+    card.append(el('h3',{},'Split JPK_KR_PD for the MF gateway'));
+    const modeSel = el('select',{id:'sp-mode'},
+      el('option',{value:'size'},'By maximum part size'),
+      el('option',{value:'count'},'By record count'),
+      el('option',{value:'element'},'Every record separately'));
+    const sizeIn  = el('input',{type:'number',id:'sp-size',value:Settings.data.splitTargetMB,min:'1',max:'99'});
+    const cntIn   = el('input',{type:'number',id:'sp-count',value:Settings.data.splitCount,min:'1'});
+    const tagIn   = el('input',{type:'text',id:'sp-tag',value:tag});
+    card.append(el('div',{class:'row'},
+      el('label',{class:'field'},'Split mode', modeSel),
+      el('label',{class:'field'},'Max part size (MB)', sizeIn),
+      el('label',{class:'field'},'Records per part', cntIn),
+      el('label',{class:'field'},'Record element (auto-detected)', tagIn)));
+    const secNote = d.scan?.ok
+      ? ' Detected record sections: ' + [...Splitter.planFromScan(d.scan, null).names].map(n=>`<${n}>`).join(', ') + '.'
+      : '';
+    card.append(el('div',{class:'small muted',style:'margin-top:10px;line-height:1.6'},
+      'Each part is rebuilt as complete XML: prolog + root + envelope sections (Naglowek, Podmiot1, container tags) + a document-order batch of records.',
+      Settings.data.keepCtrl?' Every control record (DziennikCtrl, KontoZapisCtrl, …) is recomputed per part.':'',
+      secNote,
+      d.big?' Large-file mode: chunked streaming split — the whole document is never loaded into memory.':''));
+    card.append(el('hr',{class:'sep'}));
+    card.append(el('div',{class:'row'},
+      el('button',{class:'btn acc',id:'sp-run'},'Split file'),
+      el('button',{class:'btn',id:'sp-zip',disabled:''},'Download all as ZIP'),
+      el('span',{class:'muted small',id:'sp-note'},
+        d.size>MF_LIMIT?`Estimated parts at ${Settings.data.splitTargetMB} MB: ~${Math.ceil(d.size/(Settings.data.splitTargetMB*MB))}`:'File already fits under 100 MB — splitting is optional.')));
+    v.append(card);
+    const res = el('div',{style:'margin-top:14px'}); v.append(res);
+
+    let lastParts = null;
+    $('#sp-run', card).onclick = async () => {
+      const opts = {
+        mode: modeSel.value === 'element' ? 'count' : modeSel.value,
+        maxBytes: (parseFloat(sizeIn.value)||95)*MB,
+        maxCount: modeSel.value === 'element' ? 1 : (parseInt(cntIn.value)||50000),
+        tag: tagIn.value.trim() || tag,
+        auto: !tagIn.value.trim() || tagIn.value.trim() === tag
+      };
+      Settings.data.splitTargetMB = parseFloat(sizeIn.value)||95;
+      Settings.data.splitCount = parseInt(cntIn.value)||50000; Settings.save();
+      const task = Task.start('Splitting…');
+      res.innerHTML = '';
+      try {
+        const parts = await Splitter.run(d, opts, task);
+        lastParts = parts;
+        $('#sp-zip', card).disabled = false;
+        const total = parts.reduce((s,p)=>s+p.blob.size,0);
+        res.append(el('div',{class:'card'},
+          el('h3',{},`Result — ${parts.length} part(s), ${fmtBytes(total)} total`),
+          ...parts.map(p => {
+            const over = p.blob.size > MF_LIMIT;
+            return el('div',{class:'part'},
+              el('span',{class:'pn'},p.name),
+              el('span',{class:'ps'},`${fmtInt(p.records)} records`),
+              el('span',{class:'pill '+(over?'err':'ok')}, fmtBytes(p.blob.size)),
+              el('button',{class:'btn',onclick(){ download(p.blob, p.name); }},'Download'));
+          })));
+        Toast.show(`Split into ${parts.length} part(s)`,'ok');
+        Log.add(`Split ${d.name} → ${parts.length} parts using <${opts.tag}>`, 'ok');
+      } catch(e) {
+        if (e.message!=='cancelled') { Toast.show('Split failed: '+e.message,'err'); Log.add('Split error: '+e.message,'err'); }
+      }
+      Task.end();
+    };
+    $('#sp-zip', card).onclick = async () => {
+      if (!lastParts) return;
+      const total = lastParts.reduce((s,p)=>s+p.blob.size,0);
+      if (total > 400*MB && !(await Dialog.confirm('Large archive',
+        `The uncompressed archive will be ${fmtBytes(total)}. Building it in the browser may take a while. Continue?`))) return;
+      const task = Task.start('Building ZIP…');
+      try {
+        const z = new ZipBuilder();
+        lastParts.forEach(p=>z.add(p.name, p.blob));
+        const blob = await z.build(task);
+        download(blob, d.name.replace(/\.xml$/i,'') + '_parts.zip');
+      } catch(e){ if (e.message!=='cancelled') Toast.show('ZIP failed: '+e.message,'err'); }
+      Task.end();
+    };
+  },
+
+  /* ------------------------------- analyze ------------------------------ */
+  async analyze() {
+    const v = $('#view-analyze'); v.innerHTML = '';
+    const d = Store.active;
+    if (!d) { v.append(el('div',{class:'card muted'},'Open a file first.')); return; }
+    if (!d.doc && !d.stats) { v.append(el('div',{class:'card muted'}, d.big && d.wf === false
+      ? 'This file is not well-formed XML — fix the structure first (see Validate for the line number).'
+      : 'Analysis needs a parsed or scanned document. Re-open the file to run the streaming scan.')); return; }
+    if (!d.stats && d.doc) {
+      const task = Task.start('Analyzing…');
+      try { d.stats = await Analyzer.run(d.doc, task); } catch(e){ Task.end(); return; }
+      Task.end(); UI.status();
+    }
+    const s = d.stats;
+    const cards = el('div',{class:'cards'});
+    const mk = (t,val,sub)=>el('div',{class:'card'},el('h3',{},t),el('div',{class:'metric'},val,sub?el('small',{},sub):null));
+    cards.append(
+      mk('Total nodes', fmtInt(s.nodes)), mk('Elements', fmtInt(s.elements)),
+      mk('Attributes', fmtInt(s.attributes)), mk('Text nodes', fmtInt(s.textNodes)),
+      mk('Comments', fmtInt(s.comments)), mk('Max depth', s.maxDepth),
+      mk('Namespaces', s.namespaces.size), mk('Distinct tags', s.names.size),
+      mk('DOM memory est.', fmtBytes(s.memoryEstimate)), mk('Complexity index', s.complexity, 'log-scaled'));
+    v.append(cards);
+
+    const g = el('div',{class:'grid',style:'grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-top:14px'});
+    const freq = [...s.names.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)
+      .map(([label,value])=>({label:label.replace(/^.*:/,''),value}));
+    const c1 = el('div',{class:'card'},el('h3',{},'Most frequent elements'));
+    const cv1 = el('canvas'); c1.append(cv1); g.append(c1);
+
+    const c2 = el('div',{class:'card'},el('h3',{},s.fromScan?'Root sections (streaming scan)':'Largest branches (root children, grouped)'));
+    s.rootGroups.slice(0,8).forEach(b=>{
+      const max = s.rootGroups[0].count;
+      c2.append(el('div',{style:'margin-bottom:9px'},
+        el('div',{class:'row small',style:'justify-content:space-between;margin-bottom:3px'},
+          el('span',{},`<${b.name}>` + (b.times>1?` ×${fmtInt(b.times)}`:'')),
+          el('span',{class:'muted'},fmtInt(b.count)+(s.fromScan?' occurrences':' elements'))),
+        el('div',{class:'bar'},el('i',{style:`width:${b.count/max*100}%`}))));
+    });
+    g.append(c2);
+
+    const c3 = el('div',{class:'card'},el('h3',{},'Repeated element names'),
+      el('table',{class:'tbl'},
+        el('thead',{},el('tr',{},el('th',{},'Element'),el('th',{},'Occurrences'))),
+        el('tbody',{},...s.repeated.map(([n,c])=>el('tr',{},el('td',{},n),el('td',{},fmtInt(c)))))));
+    g.append(c3);
+
+    const c4 = el('div',{class:'card'},el('h3',{},'Namespaces'),
+      s.namespaces.size
+        ? el('table',{class:'tbl'},
+            el('thead',{},el('tr',{},el('th',{},'URI'),el('th',{},'Elements'))),
+            el('tbody',{},...[...s.namespaces.entries()].map(([n,c])=>el('tr',{},el('td',{},n),el('td',{},fmtInt(c))))))
+        : el('div',{class:'muted small'},'No namespaces in use.'));
+    g.append(c4);
+    v.append(g);
+    requestAnimationFrame(()=>Charts.bars(cv1, freq, Math.min(460, cv1.parentElement.clientWidth-32)));
+  },
+
+  /* ------------------------------- export ------------------------------- */
+  export() {
+    const v = $('#view-export'); v.innerHTML = '';
+    const d = Store.active;
+    if (!d) { v.append(el('div',{class:'card muted'},'Open a file first.')); return; }
+    const base = d.name.replace(/\.xml$/i,'');
+    const items = [
+      ['XML', 'The current document (with editor changes applied).', () => {
+        if (d.text == null && d.file) return download(d.file, d.name);   /* large-file mode: original bytes */
+        download(new Blob([d.text ?? ''],{type:'application/xml'}), base+'.xml'); }],
+      ['Pretty XML', 'Re-indented XML.', async () => {
+        if (d.text == null) return Toast.show('Pretty print needs the document text — not available in large-file mode.','warn');
+        const task = Task.start('Formatting…');
+        try { const p = await Xml.prettyPrint(d.text ?? '', task);
+          download(new Blob([p],{type:'application/xml'}), base+'_pretty.xml'); } catch(_){}
+        Task.end(); }],
+      ['JSON', 'XML converted to a JSON object (attributes as "@attr", text as "#text").', () => {
+        if (!d.doc) return Toast.show('Needs a parsed document.','warn');
+        download(new Blob([JSON.stringify(Xml.xmlToJson(d.doc), null, 2)],{type:'application/json'}), base+'.json'); }],
+      ['CSV', 'Repeated record elements flattened into a table.', () => {
+        if (!d.doc) return Toast.show('Needs a parsed document.','warn');
+        const tag = Splitter.detectRecordTag(d);
+        const csv = Xml.toCsv(d.doc, tag);
+        if (!csv) return Toast.show(`No repeated <${tag}> records to tabulate.`,'warn');
+        download(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}), base+`_${tag}.csv`); }],
+      ['TXT', 'Plain text content (all text nodes).', () => {
+        if (!d.doc && d.text == null) return Toast.show('Text extraction needs a parsed document — not available in large-file mode.','warn');
+        const t = d.doc ? d.doc.documentElement.textContent : (d.text||'');
+        download(new Blob([t],{type:'text/plain'}), base+'.txt'); }],
+      ['PDF report', 'Validation & statistics report — PDF generated byte-by-byte in the browser.', () => App.exportReportPdf()],
+      ['ZIP', 'The current document packed into a ZIP (manual ZIP writer, no libraries).', async () => {
+        const task = Task.start('Building ZIP…');
+        try { const z = new ZipBuilder();
+          z.add(d.name, d.file && !d.dirty ? d.file : new Blob([d.text??''],{type:'application/xml'}));
+          download(await z.build(task), base+'.zip'); } catch(_){}
+        Task.end(); }],
+    ];
+    const card = el('div',{class:'card'}, el('h3',{},'Export — all formats generated locally, zero dependencies'));
+    items.forEach(([label, desc, fn]) => card.append(el('div',{class:'part'},
+      el('b',{style:'width:110px;flex:none'},label),
+      el('span',{class:'ps',style:'flex:1;white-space:normal'},desc),
+      el('button',{class:'btn acc',onclick:fn},'Export'))));
+    v.append(card);
+  },
+
+  /* ------------------------------ settings ------------------------------ */
+  settings() {
+    const v = $('#view-settings'); v.innerHTML = '';
+    const S = Settings.data;
+    const num = (key,label,min,max)=>el('label',{class:'field'},label,
+      el('input',{type:'number',value:S[key],min,max,oninput(e){ S[key]=+e.target.value; Settings.save(); }}));
+    const card = el('div',{class:'card'},
+      el('h3',{},'Preferences'),
+      el('div',{class:'row'},
+        el('label',{class:'field'},'Theme',
+          el('select',{oninput(e){ App.setTheme(e.target.value); }},
+            el('option',{value:'dark',...(S.theme==='dark'?{selected:''}:{})},'Dark'),
+            el('option',{value:'light',...(S.theme==='light'?{selected:''}:{})},'Light'))),
+        num('splitTargetMB','Default split size (MB)',1,99),
+        num('splitCount','Default records per part',1),
+        el('label',{class:'field'},'Record element override',
+          el('input',{type:'text',value:S.recordTag,placeholder:'auto-detect',oninput(e){ S.recordTag=e.target.value.trim(); Settings.save(); }}))),
+      el('hr',{class:'sep'}),
+      el('div',{class:'row'},
+        num('domLimitMB','DOM parse limit (MB) — above this, streaming mode',5,500),
+        num('highlightLimitKB','Syntax-highlight limit (KB)',100,20000),
+        el('label',{class:'field'},'Recompute DziennikCtrl on split',
+          el('select',{oninput(e){ S.keepCtrl = e.target.value==='1'; Settings.save(); }},
+            el('option',{value:'1',...(S.keepCtrl?{selected:''}:{})},'Yes (recommended)'),
+            el('option',{value:'0',...(!S.keepCtrl?{selected:''}:{})},'No — copy as-is')))),
+      el('hr',{class:'sep'}),
+      el('div',{class:'row'},
+        el('button',{class:'btn danger',onclick:async()=>{
+          if (await Dialog.confirm('Clear recent files','Remove the recent-files list stored in this browser?')) {
+            Store.recents=[]; try{localStorage.removeItem('jpkstudio-recent');}catch(_){}
+            UI.renderRecents(); Toast.show('Recent files cleared','ok');
+          }}},'Clear recent files'),
+        el('span',{class:'muted small'},'Settings persist in this browser only. The app never makes a network request.')));
+    v.append(card);
+  }
+};
+</script>
+<script>
+"use strict";
+/* ============================================================================
+ * App controller — file loading, shortcuts, drag & drop, wiring
+ * ========================================================================== */
+const App = {
+  async init() {
+    Settings.load(); Store.loadRecents();
+    this.setTheme(Settings.data.theme);
+    UI.init(); UI.go('dashboard'); UI.status();
+    Log.add('JPK Studio ready — fully offline, no dependencies.', 'ok');
+
+    $('#btn-open').onclick   = () => $('#file-input').click();
+    $('#btn-sample').onclick = () => this.loadSample();
+    $('#btn-theme').onclick  = () => this.setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+    $('#btn-sidebar').onclick= () => $('#sidebar').classList.toggle('collapsed');
+    $('#btn-logs').onclick   = () => $('#logs-drawer').classList.toggle('show');
+    $('#btn-logs-close').onclick = () => $('#logs-drawer').classList.remove('show');
+    $('#btn-logs-clear').onclick = () => Log.clear();
+    $('#btn-help').onclick   = () => this.helpDialog();
+    $('#btn-validate-quick').onclick = () => this.go('validate', true);
+    $('#btn-split-quick').onclick    = () => this.go('split');
+    $('#file-input').addEventListener('change', e => {
+      for (const f of e.target.files) this.loadFile(f);
+      e.target.value = '';
+    });
+
+    /* drag & drop anywhere */
+    ['dragover','dragenter'].forEach(ev => document.addEventListener(ev, e => {
+      e.preventDefault(); $('#drop')?.classList.add('hot');
+    }));
+    ['dragleave','drop'].forEach(ev => document.addEventListener(ev, e => {
+      e.preventDefault(); if (ev==='dragleave' && e.relatedTarget) return;
+      $('#drop')?.classList.remove('hot');
+    }));
+    document.addEventListener('drop', e => {
+      for (const f of e.dataTransfer.files)
+        if (/\.xml$/i.test(f.name) || f.type.includes('xml') || !f.type) this.loadFile(f);
+        else Toast.show(`${f.name}: not an XML file`, 'warn');
+    });
+
+    /* sidebar resizer */
+    const rez = $('#side-resizer');
+    rez.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const move = ev => { $('#sidebar').style.width = Math.max(170, Math.min(420, ev.clientX)) + 'px'; };
+      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+      addEventListener('mousemove', move); addEventListener('mouseup', up);
+    });
+    /* logs drawer resizer */
+    $('#logs-head').addEventListener('mousedown', e => {
+      if (e.target.closest('button')) return;
+      e.preventDefault();
+      const drawer = $('#logs-drawer'), startY = e.clientY, startH = drawer.offsetHeight;
+      const move = ev => { drawer.style.height = Math.max(70, Math.min(innerHeight*0.6, startH + (startY-ev.clientY))) + 'px'; };
+      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+      addEventListener('mousemove', move); addEventListener('mouseup', up);
+    });
+
+    /* keyboard shortcuts */
+    document.addEventListener('keydown', e => {
+      const c = e.ctrlKey || e.metaKey;
+      if (c && e.key >= '1' && e.key <= '8') { e.preventDefault(); this.go(NAV[+e.key-1].id); return; }
+      if (c) switch (e.key.toLowerCase()) {
+        case 'o': e.preventDefault(); $('#file-input').click(); break;
+        case 'b': e.preventDefault(); $('#sidebar').classList.toggle('collapsed'); break;
+        case 'j': e.preventDefault(); this.setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark'); break;
+        case 'p': e.preventDefault(); this.pretty(); break;
+        case 'f': if (UI.view==='editor'){ e.preventDefault(); this.toggleFind(true); } break;
+        case 'h': if (UI.view==='editor'){ e.preventDefault(); this.toggleFind(true); $('#repl-q').focus(); } break;
+        case 'g': if (UI.view==='editor'){ e.preventDefault(); Editor.gotoLine(); } break;
+        case 'e': e.preventDefault(); this.go('validate', true); break;
+        case 's': e.preventDefault(); this.go('export'); break;
+      }
+      if (e.key === 'F1') { e.preventDefault(); this.helpDialog(); }
+      if (e.key === 'Escape') this.toggleFind(false);
+    });
+  },
+
+  setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    Settings.data.theme = t; Settings.save();
+    if (UI.view==='dashboard') Views.dashboard();
+    if (UI.view==='analyze') { /* re-render charts with new palette */ const d=Store.active; if(d?.stats) Views.analyze(); }
+  },
+
+  go(view, arg) { UI.go(view); if (view==='validate' && arg) Views.validate(true); },
+
+  toggleFind(show) {
+    const fb = $('#findbar'); if (!fb) return;
+    fb.classList.toggle('show', !!show);
+    if (show) { $('#find-q').focus(); $('#find-q').select(); }
+  },
+
+  async loadSample() {
+    const rows = await Dialog.prompt('Generate sample JPK_KR_PD', 'Number of journal entries (Dziennik records):', '400');
+    if (rows === null) return;
+    const text = generateSample(Math.max(1, Math.min(200000, parseInt(rows)||400)));
+    const blob = new Blob([text], { type:'application/xml' });
+    const f = new File([blob], `sample_JPK_KR_PD_${rows}.xml`, { type:'application/xml' });
+    this.loadFile(f);
+  },
+
+  async loadFile(file) {
+    const task = Task.start('Loading ' + file.name + '…');
+    const d = makeDoc(file.name, file.size);
+    d.file = file;
+    try {
+      /* encoding + UTF-8 scan on a chunk (full scan for files < 64 MB) */
+      const headBytes = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
+      d.encoding = Xml.detectEncoding(headBytes);
+      Task.progress(0.1);
+      /* full-file UTF-8 scan, chunked — no more probe-only sampling and no
+       * false positives from a chunk boundary landing inside a Polish char */
+      d.utf8ok = (await Xml.validateUtf8Stream(file, Task.active, 0.1, 0.3)).ok;
+      Task.progress(0.3);
+
+      d.big = file.size > Settings.data.domLimitMB*MB;
+      if (!d.big) {
+        d.text = await file.text();
+        Task.progress(0.45);
+        const { doc, error, line } = Xml.parse(d.text);
+        d.doc = doc; d.parseError = error; d.parseLine = line;
+        if (doc) {
+          const t2 = Task.active;
+          d.stats = await Analyzer.run(doc, t2);
+        } else if (file.size > 32*MB) {
+          /* Browsers can fail DOMParser on very large inputs for memory
+           * reasons and report it like a syntax error. Double-check with the
+           * streaming scanner before claiming the XML is broken. */
+          d.scan = await Xml.scanStream(file, Task.active, 0.5, 0.85);
+          if (d.scan.ok) {
+            d.big = true; d.doc = null; d.text = null; d.wf = true;
+            d.stats = statsFromScan(d.scan, file.size);
+            Log.add(`${file.name}: browser DOM parse failed but the streaming scan confirms the XML is well-formed — switched to large-file mode.`, 'warn');
+            Toast.show('Document is well-formed; the browser could not hold its DOM, so large-file mode was enabled.', 'warn', 6000);
+          } else Log.add(`Parse error in ${file.name}: ${error}`, 'err');
+        } else {
+          Log.add(`Parse error in ${file.name}: ${error}`, 'err');
+        }
+      } else {
+        Log.add(`${file.name} opened in large-file mode (${fmtBytes(file.size)} > ${Settings.data.domLimitMB} MB DOM limit).`, 'warn');
+        d.scan = await Xml.scanStream(file, Task.active, 0.35, 0.85);
+        d.wf = d.scan.ok;
+        if (d.scan.ok) {
+          d.stats = statsFromScan(d.scan, file.size);
+          Log.add(`Streaming scan: well-formed, ${fmtInt(d.scan.stats.elements)} elements, depth ${d.scan.stats.maxDepth}.`, 'ok');
+        } else {
+          Log.add(`Streaming scan: NOT well-formed — ${d.scan.error} (line ${d.scan.line}).`, 'err');
+        }
+      }
+
+      Store.docs.set(d.id, d);
+      Store.activeId = d.id;
+      Store.addRecent(d.name, d.size);
+      UI.renderTabs(); UI.status();
+      Task.end();
+      Toast.show(`${file.name} loaded (${fmtBytes(file.size)})`, 'ok');
+      if (file.size > MF_LIMIT)
+        Toast.show('This file exceeds the 100 MB MF gateway limit — use Split.', 'warn', 6000);
+      this.go(d.doc || d.big ? 'dashboard' : 'editor');
+      if (!d.doc && !d.big && d.parseError) {
+        this.go('editor');
+        Toast.show('XML is not well-formed — opened in editor. ' + (d.parseLine?`(line ${d.parseLine})`:''), 'err', 6000);
+      }
+      if (d.big && d.wf === false)
+        Toast.show(`XML is not well-formed: ${d.scan.error} (around line ${fmtInt(d.scan.line||0)})`, 'err', 8000);
+      /* auto validation summary */
+      await Validator.run(d, null).catch(()=>{});
+      UI.status();
+      if (UI.view==='dashboard') Views.dashboard();
+    } catch (e) {
+      Task.end();
+      Toast.show('Failed to load: ' + e.message, 'err');
+      Log.add('Load error: ' + e.message, 'err');
+    }
+  },
+
+  activate(id) {
+    Store.activeId = id;
+    UI.renderTabs(); UI.status();
+    Views[UI.view]?.();
+  },
+
+  async closeDoc(id) {
+    const d = Store.docs.get(id);
+    if (d?.dirty && !(await Dialog.confirm('Unsaved changes', `${d.name} has unsaved editor changes. Close anyway?`))) return;
+    Store.docs.delete(id);
+    if (Store.activeId === id) Store.activeId = [...Store.docs.keys()].pop() || null;
+    UI.renderTabs(); UI.status(); Views[UI.view]?.();
+  },
+
+  /* Opt-in DOM parse for a large file (tree view / XPath). Honest failure:
+   * if the parser dies on a file the stream scan proved well-formed, say so. */
+  async forceDom() {
+    const d = Store.active;
+    if (!d?.file || !d.big) return;
+    const go = await Dialog.confirm('Load into DOM?',
+      `${d.name} is ${fmtBytes(d.size)}. Parsing it into a DOM may use several GB of memory and freeze the tab for a while. Continue?`);
+    if (!go) return;
+    const task = Task.start('Parsing into DOM…');
+    try {
+      const text = await d.file.text();
+      Task.progress(0.35); await nextFrame();
+      const { doc, error, line } = Xml.parse(text);
+      if (!doc) {
+        Task.end();
+        if (d.wf === true)
+          return Toast.show('The XML is well-formed (stream-verified), but the browser could not build a DOM this large. Streaming tools remain fully available.', 'warn', 8000);
+        d.parseError = error; d.parseLine = line;
+        return Toast.show(`Not well-formed: ${error}` + (line?` (line ${line})`:''), 'err', 7000);
+      }
+      d.doc = doc; d.text = null;                 /* keep memory down: DOM without a text copy */
+      d.big = false; d.forcedDom = true;
+      d.stats = await Analyzer.run(doc, Task.active);
+      Task.end();
+      Toast.show('DOM loaded — tree view and XPath are now available.', 'ok');
+      UI.status(); Views[UI.view]?.();
+    } catch (e) {
+      Task.end();
+      if (d.wf === true)
+        Toast.show('The XML is well-formed (stream-verified), but the browser ran out of memory building the DOM. Streaming tools remain fully available.', 'warn', 8000);
+      else Toast.show('DOM load failed: ' + e.message, 'err');
+    }
+  },
+
+  async pretty() {
+    const d = Store.active;
+    if (!d || d.big) return Toast.show('Pretty print needs a document loaded in the editor.','warn');
+    const task = Task.start('Pretty printing…');
+    try {
+      const p = await Xml.prettyPrint(d.text ?? Editor.get(), task);
+      d.text = p; d.dirty = true;
+      if (UI.view!=='editor') this.go('editor');
+      Editor.set(p);
+      UI.renderTabs();
+      Toast.show('Formatted','ok');
+    } catch(e){ if (e.message!=='cancelled') Toast.show('Format failed: '+e.message,'err'); }
+    Task.end();
+  },
+
+  applyEditor() {
+    const d = Store.active;
+    if (!d) return;
+    if (d.big || (d.text == null && d.file))
+      return Toast.show('This file is in large-file mode — the editor shows a placeholder, not the document, so there is nothing to apply.', 'warn', 5000);
+    d.text = Editor.get(); d.dirty = true;
+    const { doc, error, line } = Xml.parse(d.text);
+    d.doc = doc; d.parseError = error;
+    d.stats = null; d.issues = null;
+    d.size = new Blob([d.text]).size;
+    d.file = null;
+    UI.renderTabs(); UI.status();
+    if (error) Toast.show(`Still not well-formed${line?` (line ${line})`:''} — changes kept in memory.`, 'warn', 5000);
+    else Toast.show('Changes applied — document re-parsed.', 'ok');
+  },
+
+  async xpathDialog() {
+    const d = Store.active;
+    if (!d?.doc) return Toast.show('XPath needs a parsed document.','warn');
+    const q = await Dialog.prompt('XPath search',
+      'Expression (namespaces: use *[local-name()="Dziennik"] for namespaced JPK):', '//*[local-name()="NIP"]');
+    if (!q) return;
+    try {
+      const r = d.doc.evaluate(q, d.doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+      const rows = [];
+      for (let i = 0; i < Math.min(r.snapshotLength, 200); i++) {
+        const n = r.snapshotItem(i);
+        rows.push(el('tr',{},
+          el('td',{}, n.nodeName || n.nodeType),
+          el('td',{}, (n.textContent||'').trim().slice(0,90))));
+      }
+      Dialog.open({ title:`XPath — ${fmtInt(r.snapshotLength)} match(es)`,
+        body: rows.length
+          ? el('div',{style:'max-height:50vh;overflow:auto'},
+              el('table',{class:'tbl'},
+                el('thead',{},el('tr',{},el('th',{},'Node'),el('th',{},'Value'))),
+                el('tbody',{},...rows)),
+              r.snapshotLength>200?el('div',{class:'muted small',style:'margin-top:8px'},'Showing first 200.'):null)
+          : 'No matches.',
+        buttons:[{label:'Close', value:true, acc:true}] });
+      Log.add(`XPath "${q}" → ${r.snapshotLength} matches`);
+    } catch(e) { Toast.show('XPath error: '+e.message,'err'); }
+  },
+
+  exportReportPdf() {
+    const d = Store.active;
+    if (!d) return Toast.show('Open a file first.','warn');
+    const L = [];
+    L.push(`File: ${d.name}`);
+    L.push(`Size: ${fmtBytes(d.size)}  |  MF gateway limit usage: ${(d.size/MF_LIMIT*100).toFixed(1)}% of 100 MB`);
+    L.push(`Encoding: ${d.encoding}  |  UTF-8 valid: ${d.utf8ok===null?'n/a':d.utf8ok?'yes':'NO'}`);
+    L.push(`Generated: ${new Date().toLocaleString()}  |  JPK Studio (offline single-file tool)`);
+    L.push('');
+    if (d.stats) {
+      const s = d.stats;
+      L.push('--- STATISTICS ---');
+      L.push(`Nodes ${fmtInt(s.nodes)} | Elements ${fmtInt(s.elements)} | Attributes ${fmtInt(s.attributes)} | Text nodes ${fmtInt(s.textNodes)}`);
+      L.push(`Comments ${s.comments} | Max depth ${s.maxDepth} | Namespaces ${s.namespaces.size} | Distinct tags ${s.names.size}`);
+      L.push(`DOM memory estimate ${fmtBytes(s.memoryEstimate)} | Complexity index ${s.complexity}`);
+      L.push('');
+    }
+    L.push('--- VALIDATION ---');
+    if (d.issues) d.issues.forEach(i => {
+      L.push(`[${i.sev.toUpperCase()}] ${i.title}`);
+      L.push(`        ${i.detail}`);
+    });
+    else L.push('Not validated yet — run Validation first for the full rule set.');
+    download(buildPdf('JPK Studio — file report', L), d.name.replace(/\.xml$/i,'') + '_report.pdf');
+  },
+
+  helpDialog() {
+    const rows = [
+      ['Ctrl+O','Open XML file'],['Ctrl+1…8','Switch view (Dashboard…Settings)'],
+      ['Ctrl+P','Pretty print'],['Ctrl+F / Ctrl+H','Find / Replace (editor)'],
+      ['Ctrl+G','Go to line'],['Ctrl+E','Run validation'],['Ctrl+S','Export view'],
+      ['Ctrl+B','Toggle sidebar'],['Ctrl+J','Toggle theme'],['F1','This help'],['Esc','Close find / dialogs'],
+    ];
+    Dialog.open({ title:'Keyboard shortcuts',
+      body: el('table',{class:'tbl shortcuts'}, el('tbody',{},
+        ...rows.map(([k,v])=>el('tr',{},el('td',{},el('kbd',{class:'k'},k)),el('td',{},v))))),
+      buttons:[{label:'Close',value:true,acc:true}] });
+  }
+};
+
+App.init();
+</script>
+</body>
+</html>
