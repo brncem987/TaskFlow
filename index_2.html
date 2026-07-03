@@ -366,6 +366,7 @@ kbd.k{font-family:var(--font-mono);background:var(--panel2);border:1px solid var
         <section class="view" id="view-split" role="tabpanel"></section>
         <section class="view" id="view-analyze" role="tabpanel"></section>
         <section class="view" id="view-export" role="tabpanel"></section>
+        <section class="view" id="view-reconcile" role="tabpanel"></section>
         <section class="view" id="view-settings" role="tabpanel"></section>
       </div>
       <div id="logs-drawer">
@@ -1084,33 +1085,49 @@ const Validator = {
       if (recs.length) {
         add('info', 'Journal entries found', `${fmtInt(recs.length)} <Dziennik> record(s).`);
         const seen = new Set(); let dups = 0, dateOut = 0, missing = 0;
-        let sumW = 0, sumM = 0;
+        let sumW = 0, sumM = 0, kzTotal = 0;                       /* cents */
+        const cents = t => Math.round(parseFloat(t)*100) || 0;
         for (let i = 0; i < recs.length; i++) {
           if (task?.cancelled) throw new Error('cancelled');
           const r = recs[i];
-          const nr = r.getElementsByTagName('NrZapisu')[0]?.textContent?.trim();
+          const gt = t => r.getElementsByTagName(t);
+          const nr = (gt('NrZapisu')[0] || gt('D_1')[0])?.textContent?.trim();
           if (nr) { if (seen.has(nr)) dups++; seen.add(nr); } else missing++;
-          const dt = r.getElementsByTagName('DataOperacji')[0]?.textContent?.trim();
+          const dt = (gt('DataOperacji')[0] || gt('D_7')[0])?.textContent?.trim();
           if (dt && from && to && (dt < from || dt > to)) dateOut++;
-          sumW += parseFloat(r.getElementsByTagName('KwotaWinien')[0]?.textContent) || 0;
-          sumM += parseFloat(r.getElementsByTagName('KwotaMa')[0]?.textContent) || 0;
+          kzTotal += gt('KontoZapis').length;
+          for (const z of gt('KwotaWinien')) sumW += cents(z.textContent);
+          for (const z of gt('KwotaMa'))     sumM += cents(z.textContent);
+          for (const z of gt('Z_4')) sumW += cents(z.textContent);
+          for (const z of gt('Z_7')) sumM += cents(z.textContent);
           if (i % 8000 === 0) { Task.progress(i/recs.length); await nextFrame(); }
         }
-        if (dups) add('err', `Duplicate NrZapisu (${dups}×)`, 'Journal entry numbers must be unique within the file.');
-        else add('ok', 'No duplicate entry numbers', 'NrZapisu values are unique.');
-        if (missing) add('err', `Missing NrZapisu (${missing}×)`, 'Every journal record requires an entry number.');
-        if (dateOut) add('warn', `Operations outside period (${dateOut}×)`, 'DataOperacji falls outside DataOd–DataDo.');
+        if (dups) add('err', `Duplicate entry number (${dups}×)`, 'Journal entry numbers (NrZapisu / D_1) must be unique within the file.');
+        else add('ok', 'No duplicate entry numbers', 'Entry numbers (NrZapisu / D_1) are unique.');
+        if (missing) add('err', `Missing entry number (${missing}×)`, 'Every journal record requires NrZapisu (JPK_KR) or D_1 (JPK_KR_PD).');
+        if (dateOut) add('warn', `Operations outside period (${dateOut}×)`, 'Operation date falls outside DataOd–DataDo.');
         const diff = Math.abs(sumW - sumM);
-        if (diff > 0.005) add('err', 'Journal not balanced', `Σ KwotaWinien = ${sumW.toFixed(2)}, Σ KwotaMa = ${sumM.toFixed(2)} (diff ${diff.toFixed(2)}). Debits must equal credits.`);
-        else add('ok', 'Journal balanced', `Debits equal credits (${sumW.toFixed(2)}).`);
+        if (diff > 0) add('err', 'Journal not balanced', `Σ debit = ${(sumW/100).toFixed(2)}, Σ credit = ${(sumM/100).toFixed(2)} (diff ${(diff/100).toFixed(2)}). Debits must equal credits.`);
+        else add('ok', 'Journal balanced', `Debits equal credits (${(sumW/100).toFixed(2)}).`);
 
-        const ctrl = get('DziennikCtrl')[0];
+        const ctrl = get('DziennikCtrl')[0] || get('Ctrl')[0];
         if (ctrl) {
-          const declared = parseInt(ctrl.getElementsByTagName('LiczbaWierszyDziennika')[0]?.textContent);
+          const cg = t => ctrl.getElementsByTagName(t)[0]?.textContent?.trim();
+          const declared = parseInt(cg('LiczbaWierszyDziennika') ?? cg('C_1'));
           if (declared && declared !== recs.length)
-            add('err', 'Control record mismatch', `DziennikCtrl declares ${fmtInt(declared)} rows but the file contains ${fmtInt(recs.length)}. Re-generate control sums (they must be recomputed after splitting).`);
-          else if (declared) add('ok', 'Control record consistent', `LiczbaWierszyDziennika = ${fmtInt(declared)}.`);
-        } else add('warn', 'No <DziennikCtrl> control record', 'JPK_KR_PD includes control counts/sums; verify against the current XSD.');
+            add('err', 'Control record mismatch', `Control declares ${fmtInt(declared)} journal rows but the file contains ${fmtInt(recs.length)}. Control sums must be recomputed after splitting.`);
+          else if (declared) add('ok', 'Control row count consistent', `Declared journal rows = ${fmtInt(declared)}.`);
+          const c3 = parseInt(cg('C_3'));
+          if (Number.isFinite(c3)) {
+            if (c3 !== kzTotal) add('err', 'C_3 mismatch', `C_3 declares ${fmtInt(c3)} KontoZapis lines but the file contains ${fmtInt(kzTotal)}.`);
+            else add('ok', 'C_3 consistent', `${fmtInt(c3)} KontoZapis lines.`);
+          }
+          const c4 = cg('C_4'), c5 = cg('C_5');
+          if (c4 != null && cents(c4) !== sumW) add('err', 'C_4 mismatch', `C_4 = ${c4} but Σ Z_4 = ${(sumW/100).toFixed(2)}.`);
+          if (c5 != null && cents(c5) !== sumM) add('err', 'C_5 mismatch', `C_5 = ${c5} but Σ Z_7 = ${(sumM/100).toFixed(2)}.`);
+          if (c4 != null && c5 != null && cents(c4) === sumW && cents(c5) === sumM)
+            add('ok', 'Control sums consistent', 'C_4 = Σ Z_4 and C_5 = Σ Z_7.');
+        } else add('warn', 'No control record found', 'Expected <DziennikCtrl> (JPK_KR) or <Ctrl> (JPK_KR_PD).');
       }
       // empty required-ish values
       let empty = 0;
@@ -1172,22 +1189,25 @@ const Validator = {
           const nip = grab(t, 'NIP');
           if (nip) { nipCount++; if (!Validator.nipValid(nip)) { badNip++; add('err', 'Invalid NIP in Podmiot1', `NIP ${nip} fails the Polish checksum (weights 6-5-7-2-3-4-5-6-7).`); } }
         }
-        const cm = /^<([A-Za-z][\w.-]*)Ctrl[\s>]/.exec(t);
-        if (cm) ctrls.push({ name: cm[1],
-          declared: parseInt(grab(t, 'LiczbaWierszy[A-Za-z]*')) || null,
-          sumW: parseFloat(grab(t, 'Suma[A-Za-z]*Winien')) , sumM: parseFloat(grab(t, 'Suma[A-Za-z]*Ma')) });
+        const cm = /(?:^|\n\s*)<([A-Za-z][\w.-]*)?Ctrl[\s>]/.exec(t);
+        if (cm) ctrls.push({ name: cm[1] || '',
+          declared: parseInt(grab(t, 'LiczbaWierszy[A-Za-z]*') ?? grab(t, 'C_1')) || null,
+          kz: parseInt(grab(t, 'C_3')),
+          sumW: parseFloat(grab(t, 'Suma[A-Za-z]*Winien') ?? grab(t, 'C_4')),
+          sumM: parseFloat(grab(t, 'Suma[A-Za-z]*Ma') ?? grab(t, 'C_5')) });
         return;
       }
-      const agg = per.get(u.name) || { n:0, w:0, m:0 };
+      const agg = per.get(u.name) || { n:0, w:0, m:0, kz:0 };
       agg.n++;
-      let mt; const rw = /<Kwota[A-Za-z]*Winien[^>]*>\s*([-\d.,]+)/g, rm = /<Kwota[A-Za-z]*Ma[^>]*>\s*([-\d.,]+)/g;
-      while ((mt = rw.exec(u.text))) agg.w += parseFloat(mt[1].replace(',', '.')) || 0;
-      while ((mt = rm.exec(u.text))) agg.m += parseFloat(mt[1].replace(',', '.')) || 0;
+      let mt; const rw = /<(?:Kwota[A-Za-z]*Winien|Z_4)[^>]*>\s*([-\d.,]+)/g, rm = /<(?:Kwota[A-Za-z]*Ma|Z_7)[^>]*>\s*([-\d.,]+)/g;
+      while ((mt = rw.exec(u.text))) agg.w += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
+      while ((mt = rm.exec(u.text))) agg.m += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
+      agg.kz += (u.text.match(/<KontoZapis[\s>]/g) || []).length;
       per.set(u.name, agg);
       if (journalName(u.name)) {
-        const nr = grab(u.text, 'NrZapisu');
+        const nr = grab(u.text, 'NrZapisu') ?? grab(u.text, 'D_1');
         if (nr) { if (seen.has(nr)) dups++; seen.add(nr); } else missing++;
-        const dt = grab(u.text, 'DataOperacji');
+        const dt = grab(u.text, 'DataOperacji') ?? grab(u.text, 'D_7');
         if (dt && from && to && (dt < from || dt > to)) dateOut++;
       }
       if (nipCount < 20000) {
@@ -1196,32 +1216,38 @@ const Validator = {
       } else nipCapped = true;
     }, 0.35, 0.95);
 
-    for (const [name, agg] of per) add('info', `Section <${name}>`, `${fmtInt(agg.n)} record(s)` + (agg.w || agg.m ? ` — Σ Winien ${agg.w.toFixed(2)}, Σ Ma ${agg.m.toFixed(2)}` : '') + '.');
+    for (const [name, agg] of per) add('info', `Section <${name}>`, `${fmtInt(agg.n)} record(s)` + (agg.kz ? `, ${fmtInt(agg.kz)} KontoZapis line(s)` : '') + (agg.w || agg.m ? ` — Σ debit ${(agg.w/100).toFixed(2)}, Σ credit ${(agg.m/100).toFixed(2)}` : '') + '.');
     const j = [...per.entries()].find(([n]) => journalName(n));
     if (j) {
       const [, agg] = j;
-      if (dups) add('err', `Duplicate NrZapisu (${fmtInt(dups)}×)`, 'Journal entry numbers must be unique within the file.');
-      else add('ok', 'No duplicate entry numbers', 'NrZapisu values are unique.');
-      if (missing) add('err', `Missing NrZapisu (${fmtInt(missing)}×)`, 'Every journal record requires an entry number.');
-      if (dateOut) add('warn', `Operations outside period (${fmtInt(dateOut)}×)`, 'DataOperacji falls outside DataOd–DataDo.');
+      if (dups) add('err', `Duplicate entry number (${fmtInt(dups)}×)`, 'Journal entry numbers (NrZapisu / D_1) must be unique within the file.');
+      else add('ok', 'No duplicate entry numbers', 'Entry numbers (NrZapisu / D_1) are unique.');
+      if (missing) add('err', `Missing entry number (${fmtInt(missing)}×)`, 'Every journal record requires NrZapisu (JPK_KR) or D_1 (JPK_KR_PD).');
+      if (dateOut) add('warn', `Operations outside period (${fmtInt(dateOut)}×)`, 'Operation date falls outside DataOd–DataDo.');
       const diff = Math.abs(agg.w - agg.m);
-      if (diff > 0.005) add('err', 'Journal not balanced', `Σ KwotaWinien = ${agg.w.toFixed(2)}, Σ KwotaMa = ${agg.m.toFixed(2)} (diff ${diff.toFixed(2)}). Debits must equal credits.`);
-      else add('ok', 'Journal balanced', `Debits equal credits (${agg.w.toFixed(2)}).`);
+      if (diff > 0) add('err', 'Journal not balanced', `Σ debit = ${(agg.w/100).toFixed(2)}, Σ credit = ${(agg.m/100).toFixed(2)} (diff ${(diff/100).toFixed(2)}). Debits must equal credits.`);
+      else add('ok', 'Journal balanced', `Debits equal credits (${(agg.w/100).toFixed(2)}).`);
     }
     if (badNip) add('err', `Invalid NIP checksum (${fmtInt(badNip)}×)`, 'One or more NIP values fail the Polish checksum. Foreign counterparties should use NrIdKontrahenta instead.');
     else if (nipCount) add('ok', 'NIP checksums valid', `${fmtInt(nipCount)} NIP value(s) verified${nipCapped ? ' (capped at 20 000)' : ''}.`);
     for (const c of ctrls) {
-      const base = per.get(c.name) || per.get(c.name + 'Wiersz') || [...per.entries()].find(([n]) => n.replace(/Wiersz$/, '') === c.name)?.[1];
-      if (!base || c.declared == null) { if (c.declared != null) add('info', `<${c.name}Ctrl>`, `Declares ${fmtInt(c.declared)} rows.`); continue; }
+      const base = per.get(c.name) || per.get(c.name + 'Wiersz')
+        || [...per.entries()].find(([n]) => n.replace(/Wiersz$/, '') === c.name)?.[1]
+        || (c.name === '' ? [...per.entries()].find(([n]) => journalName(n))?.[1] : null);
+      const label = c.name ? `<${c.name}Ctrl>` : '<Ctrl>';
+      if (!base || c.declared == null) { if (c.declared != null) add('info', label, `Declares ${fmtInt(c.declared)} rows.`); continue; }
       if (c.declared !== base.n)
-        add('err', `Control record mismatch (<${c.name}Ctrl>)`, `Declares ${fmtInt(c.declared)} rows but the file contains ${fmtInt(base.n)}. Control sums must be recomputed after splitting.`);
-      else add('ok', `Control record consistent (<${c.name}Ctrl>)`, `LiczbaWierszy = ${fmtInt(c.declared)}.`);
-      if (Number.isFinite(c.sumW) && Math.abs(c.sumW - base.w) > 0.01)
-        add('err', `Control sum mismatch (<${c.name}Ctrl>)`, `Declared Σ Winien ${c.sumW.toFixed(2)} ≠ computed ${base.w.toFixed(2)}.`);
-      if (Number.isFinite(c.sumM) && Math.abs(c.sumM - base.m) > 0.01)
-        add('err', `Control sum mismatch (<${c.name}Ctrl>)`, `Declared Σ Ma ${c.sumM.toFixed(2)} ≠ computed ${base.m.toFixed(2)}.`);
+        add('err', `Control record mismatch (${label})`, `Declares ${fmtInt(c.declared)} journal rows but this file contains ${fmtInt(base.n)}. Control sums must be recomputed after splitting.`);
+      else add('ok', `Control row count consistent (${label})`, `${fmtInt(c.declared)} journal rows.`);
+      if (Number.isFinite(c.kz) && c.kz !== base.kz)
+        add('err', `C_3 mismatch (${label})`, `Declares ${fmtInt(c.kz)} KontoZapis lines but this file contains ${fmtInt(base.kz)}.`);
+      else if (Number.isFinite(c.kz)) add('ok', `C_3 consistent (${label})`, `${fmtInt(c.kz)} KontoZapis lines.`);
+      if (Number.isFinite(c.sumW) && Math.abs(c.sumW - base.w/100) > 0.005)
+        add('err', `Control sum mismatch (${label})`, `Declared Σ debit ${c.sumW.toFixed(2)} ≠ computed ${(base.w/100).toFixed(2)}.`);
+      if (Number.isFinite(c.sumM) && Math.abs(c.sumM - base.m/100) > 0.005)
+        add('err', `Control sum mismatch (${label})`, `Declared Σ credit ${c.sumM.toFixed(2)} ≠ computed ${(base.m/100).toFixed(2)}.`);
     }
-    if (!ctrls.length) add('warn', 'No control record found', 'JPK_KR_PD includes control counts/sums (<…Ctrl>); verify against the current XSD.');
+    if (!ctrls.length) add('warn', 'No control record found', 'Expected <DziennikCtrl> (JPK_KR) or <Ctrl> (JPK_KR_PD).');
   }
 };
 </script>
@@ -1308,6 +1334,19 @@ const Splitter = {
           if (sm) sm.textContent = m.toFixed(2);
         }
         tailStr = tail.map(t => t.nodeName===tag+'Ctrl' ? ser.serializeToString(ctrl) : ser.serializeToString(t)).join('\n');
+      }
+      if (Settings.data.keepCtrl && tail.some(t=>t.nodeName==='Ctrl')) {       // JPK_KR_PD(1) <Ctrl> C_1..C_5
+        const ctrl = tail.find(t=>t.nodeName==='Ctrl').cloneNode(true);
+        const set = (tg,val)=>{ const n = ctrl.getElementsByTagName(tg)[0]; if (n) n.textContent = val; };
+        let w = 0, m = 0, kz = 0;
+        for (const g of group) {
+          kz += g.node.getElementsByTagName('KontoZapis').length;
+          for (const z of g.node.getElementsByTagName('Z_4')) w += Math.round(parseFloat(z.textContent)*100) || 0;
+          for (const z of g.node.getElementsByTagName('Z_7')) m += Math.round(parseFloat(z.textContent)*100) || 0;
+        }
+        set('C_1', String(group.length)); set('C_3', String(kz));
+        set('C_2', (m/100).toFixed(2)); set('C_4', (w/100).toFixed(2)); set('C_5', (m/100).toFixed(2));
+        tailStr = tail.map(t => t.nodeName==='Ctrl' ? ser.serializeToString(ctrl) : ser.serializeToString(t)).join('\n');
       }
       const body = [prolog + rootOpen, headStr, group.map(g=>g.s).join('\n'), tailStr, rootClose]
         .filter(Boolean).join('\n');
@@ -1484,10 +1523,16 @@ const Splitter = {
   },
 
   /* Rewrite a <XCtrl> envelope piece with this part's row count / sums. */
-  ctrlRewrite(text, count, sumW, sumM) {
+  ctrlRewrite(text, count, sumW, sumM, kzCount) {
     let t = text.replace(/(<LiczbaWierszy[^>]*>)[^<]*(<\/)/g, `$1${count}$2`);
     if (sumW != null) t = t.replace(/(<Suma[A-Za-z]*Winien[^>]*>)[^<]*(<\/)/g, `$1${sumW.toFixed(2)}$2`);
     if (sumM != null) t = t.replace(/(<Suma[A-Za-z]*Ma[^>]*>)[^<]*(<\/)/g, `$1${sumM.toFixed(2)}$2`);
+    /* JPK_KR_PD(1): <Ctrl> — C_1 journal rows, C_3 KontoZapis lines, C_2/C_4/C_5 sums */
+    t = t.replace(/(<C_1>)[^<]*(<\/)/, `$1${count}$2`);
+    if (kzCount != null) t = t.replace(/(<C_3>)[^<]*(<\/)/, `$1${kzCount}$2`);
+    if (sumW != null) t = t.replace(/(<C_4>)[^<]*(<\/)/, `$1${sumW.toFixed(2)}$2`);
+    if (sumM != null) t = t.replace(/(<C_2>)[^<]*(<\/)/, `$1${sumM.toFixed(2)}$2`)
+                       .replace(/(<C_5>)[^<]*(<\/)/, `$1${sumM.toFixed(2)}$2`);
     return t;
   },
 
@@ -1506,12 +1551,13 @@ const Splitter = {
     let runIdx = -1, lastWasRec = false, lastName = null;
     const meta = { ratio: 1 };                          /* live bytes-per-char, updated per chunk */
     const envBytesArr = [];
-    const secStats = rec => {                           /* sums for Ctrl recompute */
+    const secStats = rec => {                           /* sums for Ctrl recompute (cents) */
       let w = 0, m = 0, mt;
-      const rw = /<Kwota[A-Za-z]*Winien[^>]*>\s*([-\d.,]+)/g, rm = /<Kwota[A-Za-z]*Ma[^>]*>\s*([-\d.,]+)/g;
-      while ((mt = rw.exec(rec))) w += parseFloat(mt[1].replace(',', '.')) || 0;
-      while ((mt = rm.exec(rec))) m += parseFloat(mt[1].replace(',', '.')) || 0;
-      return { w, m };
+      const rw = /<(?:Kwota[A-Za-z]*Winien|Z_4)[^>]*>\s*([-\d.,]+)/g, rm = /<(?:Kwota[A-Za-z]*Ma|Z_7)[^>]*>\s*([-\d.,]+)/g;
+      while ((mt = rw.exec(rec))) w += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
+      while ((mt = rm.exec(rec))) m += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
+      const kz = (rec.match(/<KontoZapis[\s>]/g) || []).length;
+      return { w, m, kz };
     };
     const finishPart = () => {
       if (!curRecs.length) return;
@@ -1535,8 +1581,8 @@ const Splitter = {
       curRecs.push({ name: u.name, run: runIdx, text: u.text });
       curBytes += est;
       const st = secStats(u.text);
-      const agg = curPer.get(u.name) || { n:0, w:0, m:0 };
-      agg.n++; agg.w += st.w; agg.m += st.m;
+      const agg = curPer.get(u.name) || { n:0, w:0, m:0, kz:0 };
+      agg.n++; agg.w += st.w; agg.m += st.m; agg.kz += st.kz;
       curPer.set(u.name, agg);
     }, 0, 0.8, meta);
     finishPart();
@@ -1555,11 +1601,13 @@ const Splitter = {
         if (item.env !== undefined) {
           let envText = item.env;
           if (doCtrl) {
-            const cm = /^<([A-Za-z][\w.-]*)Ctrl[\s>]/.exec(envText);
+            const cm = /(?:^|\n\s*)<([A-Za-z][\w.-]*)?Ctrl[\s>]/.exec(envText);
             if (cm) {
-              const base = [...plan.names].find(n => n === cm[1] || n === cm[1] + 'Wiersz' || cm[1] === n.replace(/Wiersz$/, ''));
-              const agg = part.perSec.get(base) || part.perSec.get(cm[1]) || { n:0, w:0, m:0 };
-              envText = this.ctrlRewrite(envText, agg.n, agg.w, agg.m);
+              const nm = cm[1] || '';
+              const base = [...plan.names].find(n => n === nm || n === nm + 'Wiersz' || nm === n.replace(/Wiersz$/, ''))
+                || (nm === '' ? [...plan.names].find(n => /Dziennik/i.test(n)) || [...plan.names][0] : null);
+              const agg = part.perSec.get(base) || part.perSec.get(nm) || { n:0, w:0, m:0, kz:0 };
+              envText = this.ctrlRewrite(envText, agg.n, agg.w/100, agg.m/100, agg.kz);
             }
           }
           pieces.push(envText, '\n');
@@ -1597,6 +1645,44 @@ const Splitter = {
     return this.splitStream(d, opts, task);
   }
 };
+
+/* ============================================================================
+ * Reconcile — streaming original-vs-parts proof (counts, cents-exact totals,
+ * D_1 coverage, Ctrl, envelope). No DOM, works for any size.
+ * ========================================================================== */
+const Recon = { orig:null, parts:[], report:null };
+/*RECON-SCAN-START*/
+async function reconScan(file, task, p0 = 0, p1 = 1) {
+  const dec = new TextDecoder('utf-8'), CH = 8 * MB;
+  const r = { name: file.name, size: file.size, dz: 0, kz: 0, zois: 0, z4: 0, z7: 0,
+              d1: [], d1min: null, d1max: null, ctrl: {}, nip: null, dataOd: null, dataDo: null, rpd: false };
+  let carry = '';
+  for (let pos = 0; pos < file.size; pos += CH) {
+    if (task?.cancelled) throw new Error('cancelled');
+    const last = pos + CH >= file.size;
+    const txt = carry + dec.decode(await file.slice(pos, pos + CH).arrayBuffer(), { stream: !last });
+    const cut = last ? txt.length : Math.max(0, txt.lastIndexOf('<'));
+    const body = txt.slice(0, cut); carry = txt.slice(cut);
+    let m;
+    const cnt = re => { let n = 0; while (re.exec(body)) n++; return n; };
+    r.dz += cnt(/<Dziennik[\s>]/g); r.kz += cnt(/<KontoZapis[\s>]/g); r.zois += cnt(/<ZOiS7[\s>]/g);
+    const re4 = /<Z_4>\s*([-\d.,]+)/g; while ((m = re4.exec(body))) r.z4 += Math.round(parseFloat(m[1].replace(',', '.')) * 100) || 0;
+    const re7 = /<Z_7>\s*([-\d.,]+)/g; while ((m = re7.exec(body))) r.z7 += Math.round(parseFloat(m[1].replace(',', '.')) * 100) || 0;
+    const reD1 = /<D_1>\s*(\d+)\s*</g;
+    while ((m = reD1.exec(body))) { const v = +m[1]; r.d1.push(v);
+      if (r.d1min === null || v < r.d1min) r.d1min = v;
+      if (r.d1max === null || v > r.d1max) r.d1max = v; }
+    for (const c of ['C_1', 'C_2', 'C_3', 'C_4', 'C_5'])
+      if (r.ctrl[c] === undefined) { const mm = new RegExp('<' + c + '>\\s*([^<]+)').exec(body); if (mm) r.ctrl[c] = mm[1].trim(); }
+    if (!r.nip)    { const mm = /<(?:\w+:)?NIP>\s*([^<]+)/.exec(body);    if (mm) r.nip = mm[1].trim(); }
+    if (!r.dataOd) { const mm = /<DataOd>\s*([^<]+)/.exec(body); if (mm) r.dataOd = mm[1].trim(); }
+    if (!r.dataDo) { const mm = /<DataDo>\s*([^<]+)/.exec(body); if (mm) r.dataDo = mm[1].trim(); }
+    if (!r.rpd && /<RPD[\s>]/.test(body)) r.rpd = true;
+    if (task) { Task.progress(p0 + Math.min(pos + CH, file.size) / file.size * (p1 - p0)); await nextFrame(); }
+  }
+  return r;
+}
+/*RECON-SCAN-END*/
 
 /* ============================================================================
  * Downloads
@@ -1901,7 +1987,8 @@ const NAV = [
   { id:'split',     label:'Split',     k:'5', icon:'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3M12 8v8' },
   { id:'analyze',   label:'Analysis',  k:'6', icon:'M3 3v18h18M8 17V9m4 8V5m4 12v-6' },
   { id:'export',    label:'Export',    k:'7', icon:'M12 15V3m0 12-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2' },
-  { id:'settings',  label:'Settings',  k:'8', icon:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2-1.2L14.5 3h-5l-.4 2.6a7.5 7.5 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2 1.2l.4 2.6h5l.4-2.6a7.5 7.5 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z' },
+  { id:'reconcile', label:'Reconcile', k:'8', icon:'M9 11l3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9' },
+  { id:'settings',  label:'Settings',  k:'9', icon:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2-1.2L14.5 3h-5l-.4 2.6a7.5 7.5 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2 1.2l.4 2.6h5l.4-2.6a7.5 7.5 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z' },
 ];
 
 const UI = {
@@ -2322,6 +2409,69 @@ const Views = {
     v.append(card);
   },
 
+  /* ------------------------------ reconcile ----------------------------- */
+  reconcile() {
+    const v = $('#view-reconcile'); v.innerHTML = '';
+    const card = el('div',{class:'card'},
+      el('h3',{},'Reconcile split parts against the original file'),
+      el('div',{class:'small muted',style:'line-height:1.6;margin-bottom:10px'},
+        'Streams every file chunk by chunk (nothing is loaded into memory) and proves: journal-row and KontoZapis-line counts, grand totals Σ Z_4 / Σ Z_7 in exact grosze, D_1 coverage without gaps or overlaps, per-part <Ctrl> consistency (C_1/C_3/C_4/C_5), envelope identity (NIP, reporting period) and the 100 MB gateway limit.'),
+      el('div',{class:'row'},
+        el('button',{class:'btn',onclick(){ $('#rc-orig').click(); }},'1 · Choose ORIGINAL file'),
+        el('button',{class:'btn',onclick(){ $('#rc-parts').click(); }},'2 · Choose SPLIT PARTS (multi-select)'),
+        el('button',{class:'btn acc',id:'rc-run',disabled:''},'3 · Reconcile'),
+        el('button',{class:'btn',id:'rc-pdf',disabled:''},'Export PDF report')),
+      el('div',{class:'small muted',id:'rc-files',style:'margin-top:8px'},'No files chosen.'));
+    v.append(card,
+      el('input',{type:'file',id:'rc-orig',accept:'.xml',hidden:''}),
+      el('input',{type:'file',id:'rc-parts',accept:'.xml',multiple:'',hidden:''}));
+    const res = el('div',{style:'margin-top:14px'}); v.append(res);
+    const paintFiles = () => {
+      $('#rc-files').textContent =
+        `Original: ${Recon.orig ? Recon.orig.name + ' (' + fmtBytes(Recon.orig.size) + ')' : '—'}   |   Parts: ` +
+        (Recon.parts.length ? Recon.parts.map(p=>p.name).join(', ') : '—');
+      $('#rc-run').disabled = !(Recon.orig && Recon.parts.length);
+    };
+    $('#rc-orig').onchange  = e => { Recon.orig = e.target.files[0] || null; e.target.value=''; paintFiles(); };
+    $('#rc-parts').onchange = e => { Recon.parts = [...e.target.files]; e.target.value=''; paintFiles(); };
+    paintFiles();
+    $('#rc-run').onclick = () => App.runReconcile(res);
+    $('#rc-pdf').onclick = () => App.exportReconPdf();
+    if (Recon.report) Views.paintRecon(res);
+  },
+
+  paintRecon(res) {
+    if (!Recon.report) return;
+    res.innerHTML = '';
+    const { scans, issues } = Recon.report;
+    const money = c => (c/100).toFixed(2);
+    const rows = scans.map((s, i) => el('tr', {},
+      el('td', {}, i ? 'part ' + i : 'ORIGINAL'),
+      el('td', {}, s.name), el('td', {}, fmtBytes(s.size)),
+      el('td', {}, fmtInt(s.dz)), el('td', {}, fmtInt(s.kz)),
+      el('td', {}, money(s.z4)), el('td', {}, money(s.z7)),
+      el('td', {}, s.d1min === null ? '—' : fmtInt(s.d1min) + '…' + fmtInt(s.d1max))));
+    const sum = k => scans.slice(1).reduce((a, p) => a + p[k], 0);
+    rows.push(el('tr', {}, el('td', {}, 'Σ parts'), el('td', {}, ''), el('td', {}, fmtBytes(scans.slice(1).reduce((a,p)=>a+p.size,0))),
+      el('td', {}, fmtInt(sum('dz'))), el('td', {}, fmtInt(sum('kz'))),
+      el('td', {}, money(sum('z4'))), el('td', {}, money(sum('z7'))), el('td', {}, '')));
+    res.append(el('div', {class:'card'}, el('h3', {}, 'Totals'),
+      el('table', {class:'tbl'},
+        el('thead', {}, el('tr', {}, ...['Role','File','Size','Dziennik','KontoZapis','Σ Z_4','Σ Z_7','D_1 range'].map(h => el('th', {}, h)))),
+        el('tbody', {}, ...rows))));
+    const s = { err:0, warn:0, ok:0, info:0 };
+    issues.forEach(i => s[i.sev]++);
+    const box = el('div', {class:'card', style:'margin-top:14px'},
+      el('h3', {}, 'Reconciliation checks'),
+      el('div', {class:'row', style:'margin-bottom:12px'},
+        el('span', {class:'pill err'}, s.err + ' errors'), el('span', {class:'pill warn'}, s.warn + ' warnings'),
+        el('span', {class:'pill ok'}, s.ok + ' passed'), el('span', {class:'pill info'}, s.info + ' info')));
+    issues.forEach(i => box.append(el('div', {class:'issue ' + i.sev},
+      el('span', {class:'ic'}), el('div', {}, el('b', {}, i.title), el('div', {class:'d'}, i.detail)))));
+    res.append(box);
+    const pdf = $('#rc-pdf'); if (pdf) pdf.disabled = false;
+  },
+
   /* ------------------------------ settings ------------------------------ */
   settings() {
     const v = $('#view-settings'); v.innerHTML = '';
@@ -2421,7 +2571,7 @@ const App = {
     /* keyboard shortcuts */
     document.addEventListener('keydown', e => {
       const c = e.ctrlKey || e.metaKey;
-      if (c && e.key >= '1' && e.key <= '8') { e.preventDefault(); this.go(NAV[+e.key-1].id); return; }
+      if (c && e.key >= '1' && e.key <= '9') { e.preventDefault(); this.go(NAV[+e.key-1].id); return; }
       if (c) switch (e.key.toLowerCase()) {
         case 'o': e.preventDefault(); $('#file-input').click(); break;
         case 'b': e.preventDefault(); $('#sidebar').classList.toggle('collapsed'); break;
@@ -2668,6 +2818,86 @@ const App = {
     });
     else L.push('Not validated yet — run Validation first for the full rule set.');
     download(buildPdf('JPK Studio — file report', L), d.name.replace(/\.xml$/i,'') + '_report.pdf');
+  },
+
+  async runReconcile(resEl) {
+    if (!Recon.orig || !Recon.parts.length) return;
+    const task = Task.start('Reconciling…');
+    try {
+      const files = [Recon.orig, ...Recon.parts];
+      const scans = [];
+      for (let i = 0; i < files.length; i++)
+        scans.push(await reconScan(files[i], task, i / files.length, (i + 1) / files.length));
+      const [o, ...ps] = scans;
+      const issues = [];
+      const add = (sev, title, detail) => issues.push({ sev, title, detail });
+      const money = c => (c / 100).toFixed(2);
+      const sum = k => ps.reduce((s, p) => s + p[k], 0);
+      if (sum('dz') === o.dz) add('ok', 'Journal rows reconcile', `Σ parts = ${fmtInt(sum('dz'))} = original ${fmtInt(o.dz)} <Dziennik> record(s).`);
+      else add('err', 'Journal rows DO NOT reconcile', `Σ parts ${fmtInt(sum('dz'))} ≠ original ${fmtInt(o.dz)}.`);
+      if (sum('kz') === o.kz) add('ok', 'KontoZapis lines reconcile', `Σ parts = ${fmtInt(sum('kz'))} = original ${fmtInt(o.kz)}.`);
+      else add('err', 'KontoZapis lines DO NOT reconcile', `Σ parts ${fmtInt(sum('kz'))} ≠ original ${fmtInt(o.kz)}.`);
+      if (sum('z4') === o.z4) add('ok', 'Grand total Σ Z_4 (debit) reconciles', `${money(o.z4)} — exact to the grosz.`);
+      else add('err', 'Σ Z_4 DOES NOT reconcile', `Parts ${money(sum('z4'))} ≠ original ${money(o.z4)} (diff ${money(sum('z4') - o.z4)}).`);
+      if (sum('z7') === o.z7) add('ok', 'Grand total Σ Z_7 (credit) reconciles', `${money(o.z7)} — exact to the grosz.`);
+      else add('err', 'Σ Z_7 DOES NOT reconcile', `Parts ${money(sum('z7'))} ≠ original ${money(o.z7)} (diff ${money(sum('z7') - o.z7)}).`);
+      if (o.z4 === o.z7) add('ok', 'Original is balanced', `Σ Z_4 = Σ Z_7 = ${money(o.z4)}.`);
+      else add('err', 'Original is NOT balanced', `Σ Z_4 ${money(o.z4)} ≠ Σ Z_7 ${money(o.z7)}.`);
+      ps.forEach((p, i) => p.z4 === p.z7
+        ? add('ok', `Part ${i + 1} is balanced`, `Σ Z_4 = Σ Z_7 = ${money(p.z4)}.`)
+        : add('err', `Part ${i + 1} is NOT balanced`, `Σ Z_4 ${money(p.z4)} ≠ Σ Z_7 ${money(p.z7)}.`));
+      /* D_1 coverage: every entry in exactly one part */
+      const origSet = new Set(o.d1);
+      if (origSet.size !== o.d1.length) add('err', 'Duplicate D_1 in original', `${fmtInt(o.d1.length - origSet.size)} duplicate value(s).`);
+      const seen = new Set(); let overlap = 0, alien = 0;
+      for (const p of ps) for (const v of p.d1) { if (seen.has(v)) overlap++; else seen.add(v); if (!origSet.has(v)) alien++; }
+      let gaps = 0; for (const v of origSet) if (!seen.has(v)) gaps++;
+      if (overlap) add('err', `D_1 overlap between parts (${fmtInt(overlap)}×)`, 'The same journal entry appears in more than one part.');
+      if (alien) add('err', `Unknown D_1 in parts (${fmtInt(alien)}×)`, 'Parts contain entry numbers that do not exist in the original.');
+      if (gaps) add('err', `D_1 missing from parts (${fmtInt(gaps)}×)`, 'Some journal entries of the original appear in no part.');
+      if (!overlap && !alien && !gaps) add('ok', 'D_1 coverage complete', `All ${fmtInt(origSet.size)} entry numbers appear in exactly one part — no gaps, no overlaps.`);
+      if (o.d1min !== null && origSet.size === o.d1max - o.d1min + 1) add('ok', 'D_1 sequence contiguous', `${fmtInt(o.d1min)}…${fmtInt(o.d1max)} without holes.`);
+      else if (o.d1min !== null) add('warn', 'D_1 sequence has holes', `Range ${fmtInt(o.d1min)}…${fmtInt(o.d1max)} vs ${fmtInt(origSet.size)} unique values.`);
+      /* Ctrl consistency per file */
+      const ctrlCheck = (s, label) => {
+        if (s.ctrl.C_1 === undefined) { add('warn', `${label}: no <Ctrl> record`, 'Expected C_1…C_5 control sums.'); return; }
+        const bad = [];
+        if (+s.ctrl.C_1 !== s.dz) bad.push(`C_1=${s.ctrl.C_1} vs ${fmtInt(s.dz)} Dziennik`);
+        if (s.ctrl.C_3 !== undefined && +s.ctrl.C_3 !== s.kz) bad.push(`C_3=${s.ctrl.C_3} vs ${fmtInt(s.kz)} KontoZapis`);
+        if (s.ctrl.C_4 !== undefined && Math.round(parseFloat(s.ctrl.C_4) * 100) !== s.z4) bad.push(`C_4=${s.ctrl.C_4} vs Σ Z_4 ${money(s.z4)}`);
+        if (s.ctrl.C_5 !== undefined && Math.round(parseFloat(s.ctrl.C_5) * 100) !== s.z7) bad.push(`C_5=${s.ctrl.C_5} vs Σ Z_7 ${money(s.z7)}`);
+        if (bad.length) add('err', `${label}: Ctrl INCONSISTENT`, bad.join('; ') + '. Re-split with “Recompute Ctrl on split” enabled.');
+        else add('ok', `${label}: Ctrl consistent`, `C_1=${s.ctrl.C_1}, C_3=${s.ctrl.C_3}, C_4=${s.ctrl.C_4}, C_5=${s.ctrl.C_5} match the contents.`);
+      };
+      ctrlCheck(o, 'Original');
+      ps.forEach((p, i) => ctrlCheck(p, `Part ${i + 1}`));
+      /* envelope, size, duplication */
+      const envBad = ps.filter(p => p.nip !== o.nip || p.dataOd !== o.dataOd || p.dataDo !== o.dataDo);
+      if (envBad.length) add('err', 'Envelope differs in some parts', envBad.map(p => p.name).join(', ') + ' — NIP or reporting period does not match the original.');
+      else add('ok', 'Envelope identical', `NIP ${o.nip}, period ${o.dataOd} → ${o.dataDo} in every part.`);
+      ps.forEach((p, i) => p.size <= MF_LIMIT
+        ? add('ok', `Part ${i + 1} under the 100 MB limit`, fmtBytes(p.size))
+        : add('err', `Part ${i + 1} EXCEEDS 100 MB`, fmtBytes(p.size)));
+      if (ps.length > 1 && ps.every(p => p.zois && p.zois === o.zois))
+        add('warn', 'ZOiS duplicated in every part', `Each part carries the full ZOiS (${fmtInt(o.zois)} accounts) so it validates standalone — but if the authority aggregates parts, ZOiS is counted ${ps.length}×. Confirm the split-submission convention with the tax office / advisor.`);
+      if (ps.filter(p => p.rpd).length > 1)
+        add('warn', 'RPD duplicated in multiple parts', 'Tax result section (K_1…K_8) appears in more than one part — the amounts would be read twice.');
+      Recon.report = { scans, issues };
+      Log.add(`Reconcile: ${issues.filter(i => i.sev === 'err').length} error(s), ${issues.filter(i => i.sev === 'warn').length} warning(s).`, 'ok');
+      Toast.show('Reconciliation finished', 'ok');
+    } catch (e) { if (e.message !== 'cancelled') Toast.show('Reconcile failed: ' + e.message, 'err'); }
+    Task.end();
+    if (resEl) Views.paintRecon(resEl);
+  },
+
+  exportReconPdf() {
+    if (!Recon.report) return;
+    const L = [];
+    for (const [i, s] of Recon.report.scans.entries())
+      L.push(`${i ? 'PART ' + i : 'ORIGINAL'}: ${s.name} | ${fmtBytes(s.size)} | Dziennik ${fmtInt(s.dz)} | KontoZapis ${fmtInt(s.kz)} | Z_4 ${(s.z4/100).toFixed(2)} | Z_7 ${(s.z7/100).toFixed(2)} | D_1 ${s.d1min}..${s.d1max}`);
+    L.push('');
+    for (const i of Recon.report.issues) { L.push(`[${i.sev.toUpperCase()}] ${i.title}`); L.push(`        ${i.detail}`); }
+    download(buildPdf('JPK Studio — split reconciliation report', L), 'reconciliation_report.pdf');
   },
 
   helpDialog() {
