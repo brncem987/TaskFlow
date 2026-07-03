@@ -1522,6 +1522,16 @@ const Splitter = {
     return { total, ratio: charsRead ? bytesRead / charsRead : 1 };
   },
 
+  /* Per-record sums for Ctrl recompute (integer grosze — exact). */
+  _secStats(rec) {
+    let w = 0, m = 0, mt;
+    const rw = /<(?:Kwota[A-Za-z]*Winien|Z_4)[^>]*>\s*([-\d.,]+)/g, rm = /<(?:Kwota[A-Za-z]*Ma|Z_7)[^>]*>\s*([-\d.,]+)/g;
+    while ((mt = rw.exec(rec))) w += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
+    while ((mt = rm.exec(rec))) m += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
+    const kz = (rec.match(/<KontoZapis[\s>]/g) || []).length;
+    return { w, m, kz };
+  },
+
   /* Rewrite a <XCtrl> envelope piece with this part's row count / sums. */
   ctrlRewrite(text, count, sumW, sumM, kzCount) {
     let t = text.replace(/(<LiczbaWierszy[^>]*>)[^<]*(<\/)/g, `$1${count}$2`);
@@ -1551,14 +1561,7 @@ const Splitter = {
     let runIdx = -1, lastWasRec = false, lastName = null;
     const meta = { ratio: 1 };                          /* live bytes-per-char, updated per chunk */
     const envBytesArr = [];
-    const secStats = rec => {                           /* sums for Ctrl recompute (cents) */
-      let w = 0, m = 0, mt;
-      const rw = /<(?:Kwota[A-Za-z]*Winien|Z_4)[^>]*>\s*([-\d.,]+)/g, rm = /<(?:Kwota[A-Za-z]*Ma|Z_7)[^>]*>\s*([-\d.,]+)/g;
-      while ((mt = rw.exec(rec))) w += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
-      while ((mt = rm.exec(rec))) m += Math.round(parseFloat(mt[1].replace(',', '.'))*100) || 0;
-      const kz = (rec.match(/<KontoZapis[\s>]/g) || []).length;
-      return { w, m, kz };
-    };
+    const secStats = rec => this._secStats(rec);
     const finishPart = () => {
       if (!curRecs.length) return;
       parts.push({ recs: curRecs, records: curRecs.length, perSec: curPer });
@@ -1627,12 +1630,93 @@ const Splitter = {
     return outs;
   },
 
+  /* MF-documented PERIOD split (FAQ JPK_PD Q39/Q106): each part declares its
+   * own DataOd–DataDo (≥ 1 day). Records are bucketed by operation date
+   * (D_7 / DataOperacji / D_6), Naglowek dates rewritten per part, RPD zeroed
+   * in all parts except the LAST (interim values per Q39), Ctrl recomputed. */
+  async splitByPeriod(d, opts, task) {
+    const bounds = opts.boundaries;                     /* sorted YYYY-MM-DD; part i+1 starts at bounds[i] */
+    const P = bounds.length + 1;
+    const src = (!d.big && d.text != null) ? new Blob([d.text]) : (d.file || new Blob([d.text || '']));
+    if (!d.scan) d.scan = await Xml.scanStream(src, task, 0, 0.15);
+    if (!d.scan.ok) throw new Error(`XML is not well-formed (line ${d.scan.line}): ${d.scan.error}`);
+    const plan = this.planFromScan(d.scan, null);
+    const buckets = Array.from({ length: P }, () => ({ recs: [], perSec: new Map() }));
+    const template = [];
+    let runIdx = -1, lastWasRec = false, lastName = null, undated = 0;
+    const partOf = dt => { let p = 0; if (dt) for (const b of bounds) if (dt >= b) p++; return p; };
+    await this.streamUnits(src, plan, task, u => {
+      if (u.name === null) { template.push({ env: u.text }); lastWasRec = false; return; }
+      if (!lastWasRec || lastName !== u.name) { runIdx++; template.push({ run: runIdx, name: u.name }); }
+      lastWasRec = true; lastName = u.name;
+      const dm = /<(?:D_7|DataOperacji|D_6)>\s*(\d{4}-\d{2}-\d{2})/.exec(u.text);
+      if (!dm) undated++;
+      const b = buckets[partOf(dm ? dm[1] : null)];
+      b.recs.push({ run: runIdx, text: u.text });
+      const st = this._secStats(u.text);
+      const agg = b.perSec.get(u.name) || { n:0, w:0, m:0, kz:0 };
+      agg.n++; agg.w += st.w; agg.m += st.m; agg.kz += st.kz;
+      b.perSec.set(u.name, agg);
+    }, 0, 0.75);
+    if (undated) Log.add(`Period split: ${fmtInt(undated)} record(s) without a date — assigned to part 1.`, 'warn');
+    const head = template.find(t => t.env !== undefined && /<Naglowek[\s>]/.test(t.env))?.env || '';
+    const from0 = (/<DataOd>\s*([^<]+)/.exec(head) || [,''])[1].trim();
+    const to0   = (/<DataDo>\s*([^<]+)/.exec(head) || [,''])[1].trim();
+    const prevDay = s => { const dd = new Date(s + 'T00:00:00Z'); dd.setUTCDate(dd.getUTCDate() - 1); return dd.toISOString().slice(0, 10); };
+    const periods = buckets.map((_, i) => [
+      i === 0 ? from0 : bounds[i - 1],
+      i === P - 1 ? to0 : prevDay(bounds[i])]);
+    const doCtrl = Settings.data.keepCtrl;
+    const outs = [];
+    for (let p = 0; p < P; p++) {
+      if (task?.cancelled) throw new Error('cancelled');
+      const part = buckets[p];
+      if (!part.recs.length) { Log.add(`Period split: part ${p + 1} (${periods[p][0]} → ${periods[p][1]}) has no records — skipped.`, 'warn'); continue; }
+      const isLast = p === P - 1;
+      const byRun = new Map();
+      for (const r of part.recs) { if (!byRun.has(r.run)) byRun.set(r.run, []); byRun.get(r.run).push(r.text); }
+      const pieces = [];
+      for (const item of template) {
+        if (item.env !== undefined) {
+          let envText = item.env;
+          if (/<Naglowek[\s>]/.test(envText))
+            envText = envText.replace(/(<DataOd>)[^<]*/, `$1${periods[p][0]}`)
+                             .replace(/(<DataDo>)[^<]*/, `$1${periods[p][1]}`);
+          if (!isLast && /<RPD[\s>]/.test(envText))                 /* interim parts: RPD = 0 (MF FAQ Q39) */
+            envText = envText.replace(/(<K_\d>)[^<]*(<\/K_\d>)/g, (mm, a, b) => a + '0.00' + b);
+          if (doCtrl) {
+            const cm = /(?:^|\n\s*)<([A-Za-z][\w.-]*)?Ctrl[\s>]/.exec(envText);
+            if (cm) {
+              const nm = cm[1] || '';
+              const base = [...plan.names].find(n => /Dziennik/i.test(n)) || [...plan.names][0];
+              const agg = part.perSec.get(base) || part.perSec.get(nm) || { n:0, w:0, m:0, kz:0 };
+              envText = this.ctrlRewrite(envText, agg.n, agg.w/100, agg.m/100, agg.kz);
+            }
+          }
+          pieces.push(envText, '\n');
+        } else {
+          const rs = byRun.get(item.run);
+          if (rs) for (const r of rs) pieces.push(r, '\n');
+        }
+      }
+      const blob = new Blob(pieces, { type: 'application/xml' });
+      outs.push({ name: this.partName(d.name, p + 1, P), blob, records: part.recs.length, period: periods[p] });
+      part.recs = null;
+      Task.progress(0.75 + (p + 1) / P * 0.25);
+      await nextFrame();
+    }
+    if (!outs.length) throw new Error('No parts produced — check boundary dates.');
+    Task.progress(1);
+    return outs;
+  },
+
   partName(base, i, total) {
     const pad = String(i).padStart(String(total).length, '0');
     return base.replace(/\.xml$/i, '') + `_part${pad}of${total}.xml`;
   },
 
   async run(d, opts, task) {
+    if (opts.mode === 'period') return this.splitByPeriod(d, opts, task);
     /* DOM splitter only for small single-section files where it is exact;
      * multi-section files and everything big go through the stream engine. */
     if (d.doc && !d.big) {
@@ -1655,7 +1739,8 @@ const Recon = { orig:null, parts:[], report:null };
 async function reconScan(file, task, p0 = 0, p1 = 1) {
   const dec = new TextDecoder('utf-8'), CH = 8 * MB;
   const r = { name: file.name, size: file.size, dz: 0, kz: 0, zois: 0, z4: 0, z7: 0,
-              d1: [], d1min: null, d1max: null, ctrl: {}, nip: null, dataOd: null, dataDo: null, rpd: false };
+              d1: [], d1min: null, d1max: null, ctrl: {}, nip: null, dataOd: null, dataDo: null,
+              rpd: false, rpdK: {}, rpdSum: 0 };
   let carry = '';
   for (let pos = 0; pos < file.size; pos += CH) {
     if (task?.cancelled) throw new Error('cancelled');
@@ -1674,6 +1759,8 @@ async function reconScan(file, task, p0 = 0, p1 = 1) {
       if (r.d1max === null || v > r.d1max) r.d1max = v; }
     for (const c of ['C_1', 'C_2', 'C_3', 'C_4', 'C_5'])
       if (r.ctrl[c] === undefined) { const mm = new RegExp('<' + c + '>\\s*([^<]+)').exec(body); if (mm) r.ctrl[c] = mm[1].trim(); }
+    for (const c of ['K_1', 'K_2', 'K_3', 'K_4', 'K_5', 'K_6', 'K_7', 'K_8'])
+      if (r.rpdK[c] === undefined) { const mm = new RegExp('<' + c + '>\\s*([^<]+)').exec(body); if (mm) { r.rpdK[c] = mm[1].trim(); r.rpdSum += Math.abs(Math.round(parseFloat(mm[1]) * 100)) || 0; } }
     if (!r.nip)    { const mm = /<(?:\w+:)?NIP>\s*([^<]+)/.exec(body);    if (mm) r.nip = mm[1].trim(); }
     if (!r.dataOd) { const mm = /<DataOd>\s*([^<]+)/.exec(body); if (mm) r.dataOd = mm[1].trim(); }
     if (!r.dataDo) { const mm = /<DataDo>\s*([^<]+)/.exec(body); if (mm) r.dataDo = mm[1].trim(); }
@@ -2227,14 +2314,17 @@ const Views = {
     const card = el('div',{class:'card'});
     card.append(el('h3',{},'Split JPK_KR_PD for the MF gateway'));
     const modeSel = el('select',{id:'sp-mode'},
+      el('option',{value:'period'},'By period (dates — MF-documented)'),
       el('option',{value:'size'},'By maximum part size'),
       el('option',{value:'count'},'By record count'),
       el('option',{value:'element'},'Every record separately'));
+    const perIn   = el('input',{type:'text',id:'sp-period',placeholder:'e.g. 2025-07-01'});
     const sizeIn  = el('input',{type:'number',id:'sp-size',value:Settings.data.splitTargetMB,min:'1',max:'99'});
     const cntIn   = el('input',{type:'number',id:'sp-count',value:Settings.data.splitCount,min:'1'});
     const tagIn   = el('input',{type:'text',id:'sp-tag',value:tag});
     card.append(el('div',{class:'row'},
       el('label',{class:'field'},'Split mode', modeSel),
+      el('label',{class:'field'},'Period boundary date(s), comma-sep', perIn),
       el('label',{class:'field'},'Max part size (MB)', sizeIn),
       el('label',{class:'field'},'Records per part', cntIn),
       el('label',{class:'field'},'Record element (auto-detected)', tagIn)));
@@ -2242,8 +2332,9 @@ const Views = {
       ? ' Detected record sections: ' + [...Splitter.planFromScan(d.scan, null).names].map(n=>`<${n}>`).join(', ') + '.'
       : '';
     card.append(el('div',{class:'small muted',style:'margin-top:10px;line-height:1.6'},
-      'Each part is rebuilt as complete XML: prolog + root + envelope sections (Naglowek, Podmiot1, container tags) + a document-order batch of records.',
-      Settings.data.keepCtrl?' Every control record (DziennikCtrl, KontoZapisCtrl, …) is recomputed per part.':'',
+      'PERIOD mode implements the mechanism documented by MF (FAQ JPK_PD Q39/Q106): each part gets its own DataOd–DataDo, records are assigned by operation date (D_7 / DataOperacji), RPD carries 0 in interim parts and the final K_1…K_8 only in the last part. ',
+      'Other modes rebuild each part as complete XML: prolog + root + envelope sections + a document-order batch of records.',
+      Settings.data.keepCtrl?' Every control record (DziennikCtrl, <Ctrl> C_1…C_5) is recomputed per part.':'',
       secNote,
       d.big?' Large-file mode: chunked streaming split — the whole document is never loaded into memory.':''));
     card.append(el('hr',{class:'sep'}));
@@ -2264,6 +2355,11 @@ const Views = {
         tag: tagIn.value.trim() || tag,
         auto: !tagIn.value.trim() || tagIn.value.trim() === tag
       };
+      if (modeSel.value === 'period') {
+        opts.boundaries = perIn.value.split(',').map(s => s.trim()).filter(Boolean).sort();
+        if (!opts.boundaries.length || opts.boundaries.some(b => !/^\d{4}-\d{2}-\d{2}$/.test(b)))
+          return Toast.show('Enter boundary date(s) as YYYY-MM-DD (comma-separated). Each part starts at a boundary, e.g. 2025-07-01 → Jan–Jun + Jul–Dec.', 'warn', 6000);
+      }
       Settings.data.splitTargetMB = parseFloat(sizeIn.value)||95;
       Settings.data.splitCount = parseInt(cntIn.value)||50000; Settings.save();
       const task = Task.start('Splitting…');
@@ -2279,7 +2375,7 @@ const Views = {
             const over = p.blob.size > MF_LIMIT;
             return el('div',{class:'part'},
               el('span',{class:'pn'},p.name),
-              el('span',{class:'ps'},`${fmtInt(p.records)} records`),
+              el('span',{class:'ps'},`${fmtInt(p.records)} records` + (p.period ? ` · ${p.period[0]} → ${p.period[1]}` : '')),
               el('span',{class:'pill '+(over?'err':'ok')}, fmtBytes(p.blob.size)),
               el('button',{class:'btn',onclick(){ download(p.blob, p.name); }},'Download'));
           })));
@@ -2888,9 +2984,12 @@ const App = {
         ? add('ok', `Part ${i + 1} under the 100 MB limit`, fmtBytes(p.size))
         : add('err', `Part ${i + 1} EXCEEDS 100 MB`, fmtBytes(p.size)));
       if (ps.length > 1 && ps.every(p => p.zois && p.zois === o.zois))
-        add('warn', 'ZOiS duplicated in every part', `Each part carries the full ZOiS (${fmtInt(o.zois)} accounts). MF FAQ JPK_PD question 106 addresses exactly this: in partial (period) files, what ZOiS scope to report — which confirms partial files each carry their own ZOiS section. For a record-based split with identical periods, duplicated identical ZOiS is unvalidated territory — confirm with the tax office / advisor.`);
-      if (ps.filter(p => p.rpd).length > 1)
-        add('warn', 'RPD duplicated in multiple parts', 'Per MF FAQ JPK_PD question 39, for partial JPK_KR_PD files the RPD section is expected to carry interim values (e.g. 0) in earlier parts and the final full-year tax figures only in the LAST part. Identical final RPD amounts repeated in every part risks the K_1…K_8 values being read twice — align with the MF answer / tax advisor before submitting.');
+        add(subPeriods ? 'info' : 'warn', 'ZOiS duplicated in every part', `Each part carries the full ZOiS (${fmtInt(o.zois)} accounts). MF FAQ JPK_PD question 106 addresses exactly this: in partial (period) files, what ZOiS scope to report — which confirms partial files each carry their own ZOiS section. For a record-based split with identical periods, duplicated identical ZOiS is unvalidated territory — confirm with the tax office / advisor.`);
+      const rpdFinal = ps.filter(p => p.rpdSum > 0);
+      if (rpdFinal.length > 1)
+        add('warn', 'Non-zero RPD in multiple parts', `Per MF FAQ JPK_PD question 39, partial JPK_KR_PD files should carry interim RPD values (e.g. 0) and the final full-year K_1…K_8 only in the LAST part. Non-zero RPD amounts appear in ${rpdFinal.length} part(s) — the values risk being read twice. Use the “By period” split mode, which zeroes RPD in interim parts.`);
+      else if (ps.some(p => p.rpd))
+        add('ok', 'RPD final values in a single part', 'Interim parts carry zero RPD; the final K_1…K_8 appear once — consistent with MF FAQ question 39.');
       Recon.report = { scans, issues };
       Log.add(`Reconcile: ${issues.filter(i => i.sev === 'err').length} error(s), ${issues.filter(i => i.sev === 'warn').length} warning(s).`, 'ok');
       Toast.show('Reconciliation finished', 'ok');
@@ -2911,7 +3010,7 @@ const App = {
 
   helpDialog() {
     const rows = [
-      ['Ctrl+O','Open XML file'],['Ctrl+1…8','Switch view (Dashboard…Settings)'],
+      ['Ctrl+O','Open XML file'],['Ctrl+1…9','Switch view (Dashboard…Settings)'],
       ['Ctrl+P','Pretty print'],['Ctrl+F / Ctrl+H','Find / Replace (editor)'],
       ['Ctrl+G','Go to line'],['Ctrl+E','Run validation'],['Ctrl+S','Export view'],
       ['Ctrl+B','Toggle sidebar'],['Ctrl+J','Toggle theme'],['F1','This help'],['Esc','Close find / dialogs'],
