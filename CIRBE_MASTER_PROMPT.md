@@ -845,6 +845,7 @@ Düzeltmeler, hatanın öğrenildiği günden itibaren en geç 5 iş günü içi
 | P10 | Vaka oyun kitapları: Vaka 1, Vaka 2 ve yeni vakalar; her adımda RT tablosunda yapılacak işlem | KB_P10_vakalar.md | Her adım kanıtlı veya [KULLANICI] |
 | P11 | Açık sorular, BdE ve Regnology talepleri, karar kaydı | KB_P11_acik.md | Her açık sorunun sahibi ve yolu belli |
 | P12 | Hızlı karar tablosu: kod, anlam, yapılacak, dayanak (P02-P06 birleştirilmiş) | KB_P12_karar_tablosu.md | P02-P06'daki tüm kodlar var |
+| P13 | Gönderilen/alınan dosya izleme HTML aracı (Bölüm 12) | CIRBE_DOSYA_IZLEME.html + KB_P13_izleme.md | Bölüm 12.6 kabul kriterleri |
 
 ### 10.2 STATUS.md başlangıç içeriği
 
@@ -869,6 +870,7 @@ Sıradaki adım: P00.b (kullanıcı verisi bekleniyor)
 - [ ] Müşteri numarası ile CIRBE kodu eşleştirmesi
 - [ ] Regnology dokümanları
 - [ ] Vaka 2 girdileri (Bölüm 8.1)
+- [ ] P13 girdileri (Bölüm 12.5)
 
 ## Karar kaydı
 | Tarih | Karar | Dayanak |
@@ -891,3 +893,104 @@ Sıradaki adım: P00.b (kullanıcı verisi bekleniyor)
 4. Önerilen part sırası ve kullanıcıya tek teyit sorusu.
 
 Başka analiz yapma.
+
+## 12. P13: Gönderilen ve alınan dosyaları izleyen HTML aracı
+
+### 12.1 Amaç
+
+Kullanıcının sorusu: "Gün 1'de X, A ve B dosyalarını gönderdim; BdE karşılığında ne gönderdi?" Araç bu soruyu tek ekranda cevaplar. Çalışma sınırları:
+- Veritabanından okumaz; yalnız gönderilen ve alınan dosyalarla çalışır.
+- Dosyalar yüklendikçe görünümü yeniden üretir.
+- İstenirse o anki durumu statik bir HTML rapor olarak yeniden yazar.
+
+### 12.2 Tasarımı belirleyen kanıtlar
+
+- **[KANIT] Gönderimin kimliği referanstır.** GTR 5.1.1, s.17: "El envío queda identificado por el contenido de los campos 2.1 y 2.2 Fecha y Número de referencia del envío (fecha del día en que se realiza el envío y número asignado por la entidad). Estos valores se utilizan en las notificaciones de respuesta que se realicen desde el BdE."
+- **[KANIT] Referansın biçimi.** GTR 6.1, s.51: Referencia'nın ilk 8 hanesi gönderim günü (AAAAMMDD), son 2 hanesi entidadın verdiği numara.
+- **[KANIT] Hangi yanıtlar referans taşır:**
+  - 90 kaydı gönderimin referansını taşır (5.2.18).
+  - 88 kaydı referansı ve "Tipo de registro referido" alanını taşır (5.2.16).
+  - RECHAZADO kayıtları referansı taşır (5.2.2-5.2.12).
+  - 61 kaydı, bir entidad hareketinden doğduysa o hareketin referansını, doğmadıysa sıfır taşır (5.2.11).
+  - 85, 86, 87, 89 ve 95 kayıtlarında referans alanı yoktur; bunlar yalnız CIP ve Fecha de Proceso ile kişiye veya döneme bağlanabilir.
+- **[KANIT] Bir gönderim, birden çok yanıt dosyasına dağılabilir.** GTR 4.5, s.13: bir veya birkaç mesaj "contestados parcialmente en un mensaje, quedando información en situación de pendiente de contestación". [ÇIKARIM] Eşleştirme dosya düzeyinde değil, kayıt düzeyinde yapılmalı: bir yanıt dosyası birden çok gönderime, bir gönderim birden çok yanıt dosyasına ait olabilir.
+- **[KANIT] Dosya yapısı.** GTR 4.2, s.8: bir dosya birden çok entidad bloğu içerebilir; her blok bir tipo 00 kaydıyla başlar.
+- **[ÇIKARIM] GTRTTE ile GTRTTS'yi içerikten ayırma** (Bölüm 6 düzenlerinden): GTRTTE 00 kaydında pozisyon 3-12 referansı taşır. GTRTTS 00 kaydında aynı pozisyonlar "Reservado" ve boşluktur; ayrıca ad alanı 60 değil 50 karakterdir.
+- **[KANIT] Satır sonu kuralları.** IE 2005.24 V03 (2009), Anejo 2, e-posta kanalı için: her kayıt LF (0A) ile biter; LF'den önceki boşluklar atlanabilir; son kayıtta isteğe bağlı EOF (1A) olabilir; kodlama ASCII (sayfa 850) veya ISO 8859-1. Editran'da hat üzerinde EBCDIC kullanılır. [ÇIKARIM] Ayrıştırıcı şunları yapmalı: CRLF ve LF'yi kabul etmeli, 1A'yı atmalı, kısa satırları 700'e boşlukla tamamlamalı, Latin-1 veya cp850 çözmeli. Bu belge 2009 tarihli; güncelliğini doğrula.
+- **[KANIT] Dosya adı kanala bağlı ve güvenilir anahtar değil:**
+  - FileAct'te süreç adı "File Description" alanında taşınır (IE 2005.24, 9.1.2).
+  - ITW dosya adı kısıtları GTR 7.1.2'de.
+  - [ÇIKARIM] Dosya adı yalnız kullanıcının teyit ettiği bir adlandırma varsa ve yapılandırılabilir bir desenle yardımcı bilgi olarak kullanılır.
+- **[KANIT] ITQ yalnız taşıma düzeyini izler.** BdE'nin ITQ portalı (https://aps.bde.es/itq_www) dosyanın asimilasyon durumunu gösterir (GTR 7; GNR). İş düzeyi yanıtları (88, RECHAZADO) eşleştirmez. Araç ITQ'nun tamamlayıcısıdır.
+
+### 12.3 Mimari
+
+1. **Tek HTML dosyası.** Harici kütüphane, CDN ve ağ çağrısı yok. Müşteri verisi tarayıcıdan çıkmaz.
+
+2. **Girdi.**
+   - Klasör seçimi: Chromium tabanlı tarayıcılarda (Edge, Chrome) File System Access API ile `showDirectoryPicker`. Firefox ve Safari bu API'yi desteklemez; orada `<input type="file" webkitdirectory multiple>` kullanılır.
+   - Sürükle-bırak da desteklenir.
+   - Tarayıcı sürümü ve kurum politikası kullanıcıdan teyit edilir.
+
+3. **Düzen kütüphanesi.** Kayıt düzenleri JSON olarak HTML'e gömülü:
+   - GTR: Bölüm 6.
+   - GNR ve CRG: P03 ve P04'ten, ya da kullanıcının örnek dosyalarından.
+   - Düzeni doğrulanmamış bir kayıt tipi "bilinmeyen tip" olarak gösterilir; asla tahmin edilmez.
+
+4. **Sınıflandırma.** Önce içerik: başlık kaydı yapısı ve kayıt tipleri. Dosya adı ikincildir ve yapılandırılabilir desenle okunur.
+
+5. **Eşleştirme (üç seviye):**
+   - (a) Gönderim anahtarı: süreç ailesi + entidad REN + referans (tarih + numara).
+   - (b) Kayıt düzeyi: gönderilen 21, 22 veya 23 kaydı ile yanıtı. Yanıt ya "Tipo de registro referido" ve CIP üzerinden bir 88, ya da aynı tip ve CIP'le dönen bir RECHAZADO olabilir. Kayıt durumu: kabul, ret veya bekliyor.
+   - (c) Referanssız BdE bildirimleri (85, 86, 87, 89, 95, CRGLIS ve benzerleri): CIP ve Fecha de Proceso ile kişi ve dönem görünümüne bağlanır.
+
+   GNR ve CRG'nin referans alanları doğrulanana kadar bu iki aile için eşleştirme kuralı yazılmaz.
+
+6. **Görünümler:**
+   - Gün/takvim: "D günü gönderilenler ve her birinin yanıtları".
+   - Gönderim detayı: 90 sonucu; kabul, ret ve bekleyen kayıt sayıları.
+   - Kayıt detayı: gönderilen satır ile RECHAZADO satırı yan yana; "*" ile işaretli alanlar vurgulu; "Datos mensaje" açıklaması.
+   - Kişi zaman çizelgesi (CIP).
+   - Eşleşmeyenler: yanıtsız gönderimler (kaç gündür beklediğiyle) ve sahipsiz yanıtlar.
+   - Aynı gönderimde tekrarlanan kayıtlar (GTR 6.2.1: ilki işlenir, diğerleri reddedilir).
+   - Kapanış takvimi (95).
+
+7. **Kalıcılık ve "rewrite".**
+   - Gerçeğin kaynağı dosyaların kendisidir; araç her yüklemede her şeyi baştan hesaplar.
+   - "Rapor olarak kaydet": o anki görünümü veriyle birlikte statik bir HTML'e yazar (`showSaveFilePicker`; yoksa indirme). Bu, günlük arşiv ve denetim izi içindir.
+   - Kullanıcı notları ve elle yapılan eşleştirmeler ayrı bir JSON durum dosyasına dışa aktarılır ve oradan içe aktarılır.
+
+8. **Güvenlik.** CIP ve ad için maskeleme anahtarı; raporu maskeli kaydetme seçeneği.
+
+9. **Performans.** Büyük CRG dosyaları için ayrıştırma bir Web Worker'da yapılır; uzun listeler sanal kaydırmayla gösterilir.
+
+### 12.4 Günlük kullanım
+
+1. Aracı aç; gönderilen ve alınan klasörlerini seç (ya da dosyaları sürükle).
+2. Önce "yanıt bekleyen gönderimler" ve "retler" listelerine bak.
+3. Her gönderimde sırayı izle: önce 90 (asimilasyon), sonra 88 veya RECHAZADO.
+4. Gün sonunda raporu maskeli olarak kaydet.
+5. Kapanış yaklaşınca 95 tarihlerini ve açık retleri kontrol et.
+
+### 12.5 Kullanıcıdan istenecekler (P13 için)
+
+- Her dosya tipinden maskeli örnek: GTRTTE/GTRTTS, GNRNRR/GNRNRE, CRG gönderim ve yanıtları.
+- Dosyaların bugün nasıl adlandırıldığı ve nerede tutulduğu (Regnology çıktı klasörü, yanıt klasörü).
+- Kullanılan kanal: Editran, ITW veya SWIFT FileAct.
+- Dosyaların diske hangi kodlamayla yazıldığı (ASCII/Latin-1 veya EBCDIC dönüşümü yapılmış mı).
+- Kullanılan tarayıcı ve sürümü; kurum politikasının yerel HTML'de script çalıştırmaya ve File System Access API'ye izin verip vermediği.
+- Regnology kurulumunda BdE yanıtlarını izleyen bir ekran olup olmadığı (bkz. 12.7).
+
+### 12.6 Kabul kriterleri
+
+- Kullanıcının örnek dosyalarıyla test edildi: her gönderim doğru yanıtlarla eşleşti; kısmi yanıtlar, referanssız bildirimler ve tekrarlanan kayıtlar doğru kutuya düştü.
+- Düzeni doğrulanmamış hiçbir kayıt tipi için alan adı gösterilmiyor.
+- Ağ isteği yok (tarayıcı geliştirici araçlarında doğrulandı).
+- Rapor kaydetme ve JSON durum içe/dışa aktarma çalışıyor.
+- Maskeleme açıkken hiçbir CIP veya ad görünmüyor.
+
+### 12.7 Benzer yapılar (kıyas için)
+
+- **BdE ITQ:** dosya bazında taşıma ve asimilasyon durumu.
+- **Regnology Reporting Hub:** ürün tanıtımına göre düzenleyici platformlara API ile gönderim ve düzenleyici geri bildirimlerinin otomasyonu, raporlama döngüsü için Kanban görünümleri. [BİLGİ YOK] Kullanıcının CIRBE kurulumunda bunun BdE dosyalarını kapsayıp kapsamadığı; kullanıcıya sor.
+- **Editran ve SWIFT FileAct kayıtları:** taşıma teslim bildirimleri (FileAct'te "Delivery Notification Queue"). İçerik düzeyinde eşleştirme yapmazlar.
